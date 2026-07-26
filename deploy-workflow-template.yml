@@ -1,0 +1,77 @@
+# Scheduled-rebuild + GitHub Pages publish for the NWS meteogram.
+#
+# This is a TEMPLATE. It is not installed into the agentexperiments monorepo (which
+# shouldn't run a scheduled weather job). To use it, copy this directory's contents to
+# the root of a dedicated repo and copy this file to .github/workflows/deploy.yml there.
+#
+# The data loaders run during `npm run build`, so the rebuild schedule *is* the refresh
+# rate of the published forecast. NDFD updates roughly hourly; every 6 hours is a
+# reasonable default for a static page. Tighten the cron if you want it fresher.
+#
+# Setup:
+#   1. Set NWS_LAT / NWS_LON below to the point you want (defaults: Efland, NC).
+#   2. Set NWS_USER_AGENT to a real contact string — the NWS API asks clients to
+#      identify themselves and rate-limits anonymous traffic.
+#   3. Settings → Pages → Source: GitHub Actions.
+#
+# No API key: the NWS API is open and its data is public domain.
+
+name: deploy
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"   # every 6 hours
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  NWS_LAT: "36.01"
+  NWS_LON: "-79.227"
+  NWS_USER_AGENT: "(example.com, you@example.com)"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps (used by the data loaders)
+        run: pip install -r scripts/requirements.txt
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Build (runs data loaders → fresh forecast)
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
