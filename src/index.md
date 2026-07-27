@@ -9,9 +9,17 @@ toc: false
 import * as d3 from "npm:d3";
 import {fetchForecast} from "./nws-client.js";
 
-const buildRaw = FileAttachment("data/forecast.json").json();
-const runtimeRaw = Mutable(null);
-window.__runtimeRaw = runtimeRaw;
+const DEFAULT_LAT = 36.01;
+const DEFAULT_LON = -79.227;
+
+const urlParams = new URLSearchParams(location.search);
+const initialLat = parseFloat(urlParams.get("lat")) || DEFAULT_LAT;
+const initialLon = parseFloat(urlParams.get("lon")) || DEFAULT_LON;
+const initialHours = parseInt(urlParams.get("hours")) || 48;
+
+const raw = Mutable(null);
+
+fetchForecast(initialLat, initialLon).then(data => { raw.value = data; });
 
 // Location picker UI
 const picker = html`<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem;">
@@ -25,7 +33,7 @@ const goEl = picker.querySelector("#loc-go");
 async function updateLocation(lat, lon) {
   try {
     const data = await fetchForecast(lat, lon);
-    if (window.__runtimeRaw) window.__runtimeRaw.value = data;
+    if (raw) raw.value = data;
     const p = new URLSearchParams(location.search);
     p.set("lat", Number(lat).toFixed(4));
     p.set("lon", Number(lon).toFixed(4));
@@ -55,12 +63,6 @@ goEl.addEventListener("click", async () => {
 });
 
 locEl.addEventListener("keydown", (e) => { if (e.key === "Enter") goEl.click(); });
-```
-
-```js
-// Use runtime data when available, otherwise build-time
-runtimeRaw; // create reactivity dependency
-const raw = runtimeRaw ?? buildRaw;
 ```
 
 ```js
@@ -99,10 +101,6 @@ const tzLabel = new Intl.DateTimeFormat("en-US", {timeZone: loc.timeZone, timeZo
 ```
 
 ```js
-// Read initial state from URL params
-const urlParams = new URLSearchParams(location.search);
-const initialHours = parseInt(urlParams.get("hours")) || 48;
-
 // Night bands, from the loader's sunrise/sunset table. Two purposes: they make the
 // diurnal temperature cycle legible at a glance, and they anchor "which day is this"
 // without a tick label on every hour.
@@ -514,7 +512,6 @@ renders as server-side PNGs.
 <ul>
 <li>Grid cell: ${html`<a href="https://api.weather.gov/gridpoints/${loc.office}/${loc.gridX},${loc.gridY}"><code>/gridpoints/${loc.office}/${loc.gridX},${loc.gridY}</code></a>`} — issued by NWS ${loc.office}.</li>
 <li>Sunrise/sunset are computed locally (NOAA low-precision almanac) for the night bands; the API does not supply them.</li>
-<li>Fetched at build time by <code>src/data/forecast.json.py</code>; this copy was pulled ${new Date(raw.generated).toLocaleString("en-US", {dateStyle: "medium", timeStyle: "short"})}.</li>
 </ul>
 </div>
 
