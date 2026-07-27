@@ -71,7 +71,7 @@ style: |
 
 <div class="lede">Rebuilding the National Weather Service meteogram as an interactive, modern dashboard using Observable Framework and D3/Observable Plot</div>
 
-<div class="foot">NWS forecast-viz — July 2026</div>
+<div class="foot">NWS forecast-viz - July 2026</div>
 
 ---
 
@@ -79,7 +79,7 @@ style: |
 
 # NWS Graphical Forecast Page
 
-<div class="lede">Server-rendered PNGs, checkbox-driven UI, and a 48-hour fixed view — the NDFD numbers are there, but locked inside images</div>
+<div class="lede">Server-rendered PNGs, checkbox-driven UI, and a 48-hour fixed view - the NDFD numbers are there, but locked inside images</div>
 
 <div class="foot">forecast.weather.gov/MapClick.php</div>
 
@@ -89,42 +89,39 @@ style: |
 
 # From PNGs to Live JSON
 
-<div class="lede">The original page generates server-side PNGs from a CGI script. The reskin calls the same NDFD grid API directly — fetching, expanding interval-based time series, and rendering everything in the browser</div>
+<div class="lede">The original page generates server-side PNGs from a CGI script. The reskin calls the same NDFD grid API directly - fetching, expanding interval-based time series, and rendering everything in the browser</div>
 
-<div class="foot">National Digital Forecast Database — api.weather.gov</div>
+<div class="foot">National Digital Forecast Database - api.weather.gov</div>
 
 ---
 
 <div class="eyebrow">Interactivity</div>
 
-# What the Reskin Adds
+# The Reskin
 
 <div class="cols">
 <div>
-<div class="colhead">New Capabilities</div>
+<div class="colhead">Capabilities</div>
 
-- **Location search** — city, ZIP, or lat/lon
-- **7-day horizon** — not just 48 hours
-- **Crosshair tooltips** — exact values on hover
-- **Day/night bands** — diurnal cycle at a glance
-- **Wind direction barbs** — inline on the wind panel
+- **Location search** - city, ZIP, or lat/lon
+- **Crosshair tooltips** - exact values on hover
+- **Day/night bands** - diurnal cycle at a glance with moon phases
+- **PWA** - save as an app on your phone.
 
 </div>
 <div>
 <div class="colhead">Quality of Life</div>
 
 <ul class="muted">
-<li><strong>Dark mode</strong> — CSS custom properties, no JS</li>
-<li><strong>Time range selector</strong> — 24h / 48h / 7d</li>
+<li><strong>Dark mode</strong> - CSS custom properties, no JS</li>
+<li><strong>Time range selector</strong> - 24h / 48h / 7d, replaces the fixed 48h</li>
 <li><strong>Feels-like shown only where it differs</strong></li>
 <li><strong>Single shared time axis</strong> across all 6 panels</li>
-<li><strong>No page reloads</strong> — reactive data flow</li>
+<li><strong>No page reloads</strong> - reactive data flow</li>
 </ul>
 
 </div>
 </div>
-
-<div class="foot">All panels share one x scale and one set of night bands</div>
 
 ---
 
@@ -136,28 +133,21 @@ style: |
 <div>
 <div class="colhead">Data Layer</div>
 
-- **NWS API** — `/points/{lat},{lon}` → grid cell
-- **Gridpoint endpoint** — 11 NDFD elements fetched
-- **Interval expansion** — PT1H/PT3H/PT5H → hourly grid
-- **Unit conversion** — degC/km_h-1 → °F/mph
-- **Timezone-aware** — naive wall-clock strings
-- **Sunrise/sunset** — NOAA low-precision almanac
+- **NWS API** - `/points/{lat},{lon}` → grid cell
+- **Gridpoint endpoint** - 11 NDFD elements fetched
+- **Interval expansion** - PT1H/PT3H/PT5H → hourly grid
+- **Sunrise/sunset & moon phase** - astronomy-engine computation
 
 </div>
 <div>
 <div class="colhead">Rendering Layer</div>
 
 <ul class="muted">
-<li><strong>Observable Framework</strong> — static site + reactive JS</li>
-<li><strong>Observable Plot</strong> — 6 stacked panels</li>
-<li><strong>CSS custom properties</strong> — theme without JS re-run</li>
-<li><strong>Python data loaders</strong> — fetch at build time</li>
-<li><strong>GitHub Pages deploy</strong> — cron rebuilds every 6 hours</li>
+<li><strong>Observable Framework</strong> - static site + reactive JS</li>
+<li><strong>Observable Plot</strong> - 6 stacked panels</li>
+<li><strong>CSS custom properties</strong> - theme without JS re-run</li>
+<li><strong>GitHub Pages deploy</strong> - cron rebuilds every 6 hours</li>
 </ul>
 
 </div>
 </div>
-
-<div class="foot">No API key required — the NWS API is open and public-domain</div>
-
-
