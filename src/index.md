@@ -193,6 +193,15 @@ ${picker}
 ${rangeInput}
 
 ```js
+// Current time — updates every minute for the persistent now-indicator
+const currentTime = (() => {
+  const m = Mutable(new Date());
+  setInterval(() => { m.value = new Date(); }, 60000);
+  return m;
+})();
+```
+
+```js
 // Palette: slots 1/2/3/5 of a validated categorical set, with separate light and dark
 // steps (see the <style> block at the bottom). Held in CSS variables rather than JS so
 // the viewer's theme toggle repaints without re-running anything, and assigned by
@@ -215,6 +224,7 @@ const MARGIN = {left: 46, right: 82, top: 16, bottom: 24};
 
 // Every panel shares one x scale and one set of background marks, so the stack reads as
 // a single meteogram rather than five unrelated charts.
+currentTime;
 function frame(yDomain, {showXAxis = false} = {}) {
   return [
     Plot.rect(days, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-day)", fillOpacity: 0.06}),
@@ -299,8 +309,6 @@ function panel({yDomain, yLabel, yTicks, yTickFormat, marks, height = PANEL_HEIG
   return (width) => Plot.plot({
     width, height, marginLeft: MARGIN.left, marginRight: MARGIN.right,
     marginTop: MARGIN.top, marginBottom,
-    // Local (not utc) scale: the loader's timestamps are wall-clock text parsed as
-    // local Dates, so local ticks and local formatters agree end to end.
     x: {type: "time", domain: xDomain, label: null},
     y: {domain: yDomain, label: yLabel, labelAnchor: "center", grid: true, ticks: yTicks, tickSize: 0, nice: false, tickFormat: yTickFormat},
     style: {fontSize: "11px"},
@@ -310,6 +318,7 @@ function panel({yDomain, yLabel, yTicks, yTickFormat, marks, height = PANEL_HEIG
 ```
 
 ```js
+frame;
 const tempDomain = (() => {
   const vals = data.flatMap(d => [d.temperature, d.dewpoint, d.apparent]).filter(v => v != null);
   const [lo, hi] = d3.extent(vals);
@@ -333,6 +342,14 @@ const tempPanel = panel({
     Plot.line(data, {x: "t", y: "temperature", stroke: C.temp, strokeWidth: 2, curve: "monotone-x"}),
     endLabels(tempSeries, tempDomain, PANEL_HEIGHT),
     chartLabel("Temperature"),
+    Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
+    Plot.text([currentTime], {
+      x: d => d, y: tempDomain[1], dy: 6,
+      text: d => { const h = d.getHours(), m = d.getMinutes(); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`; },
+      rotate: -90, fontSize: 10,
+      fill: MUTED, fontWeight: 600,
+      stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
+    }),
     ...hoverPips(tempSeries),
     ...crosshair("temperature", (d) => [
       `Temp  ${fmt(d.temperature, "°F")}`,
@@ -345,6 +362,7 @@ const tempPanel = panel({
 ```
 
 ```js
+frame;
 const skyPrecipRhSeries = [
   {key: "skyCover", label: "Sky cover", fill: MUTED},
   {key: "humidity", label: "Humidity", fill: "var(--series-humid)"},
@@ -364,6 +382,14 @@ const skyPrecipRhPanel = panel({
     Plot.line(data, {x: "t", y: "precipChance", stroke: C.dew, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
     endLabels(skyPrecipRhSeries, [0, 100], 190),
     chartLabel("Sky, Humidity & Precip"),
+    Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
+    Plot.text([currentTime], {
+      x: d => d, y: 100, dy: 6,
+      text: d => { const h = d.getHours(), m = d.getMinutes(); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`; },
+      rotate: -90, fontSize: 10,
+      fill: MUTED, fontWeight: 600,
+      stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
+    }),
     ...hoverPips(skyPrecipRhSeries),
     ...crosshair("skyCover", (d) => [
       `Sky cover  ${fmt(d.skyCover, "%")}`,
@@ -375,6 +401,7 @@ const skyPrecipRhPanel = panel({
 ```
 
 ```js
+frame;
 const windDomain = (() => {
   const hi = d3.max(data, d => Math.max(d.windSpeed ?? 0, d.windGust ?? 0)) ?? 10;
   return [0, Math.ceil((hi * 1.35) / 5) * 5];
@@ -401,6 +428,14 @@ const windPanel = panel({
     }),
     endLabels(windSeries, windDomain, 210),
     chartLabel("Wind"),
+    Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
+    Plot.text([currentTime], {
+      x: d => d, y: windDomain[1], dy: 6,
+      text: d => { const h = d.getHours(), m = d.getMinutes(); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`; },
+      rotate: -90, fontSize: 10,
+      fill: MUTED, fontWeight: 600,
+      stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
+    }),
     ...hoverPips(windSeries),
     ...crosshair("windSpeed", (d) => [
       `Surface  ${fmt(d.windSpeed, " mph")} from ${compass(d.windDirection)}`,
@@ -456,6 +491,14 @@ function weatherPanel(data, label, color) {
         x: "t", y1: 0, y2: "level", fill: color,
         interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2,
       }),
+      Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
+      Plot.text([currentTime], {
+        x: d => d, y: 4.5, dy: 6,
+        text: d => { const h = d.getHours(), m = d.getMinutes(); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`; },
+        rotate: -90, fontSize: 10,
+        fill: MUTED, fontWeight: 600,
+        stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
+      }),
       Plot.ruleX(data, Plot.pointerX({x: "t", stroke: INK, strokeOpacity: 0.45})),
       Plot.tip(data, Plot.pointerX({
         x: "t", y: "level", fontSize: 12,
@@ -490,6 +533,14 @@ const rainPanel = panel({
     Plot.rectY(rainData, {
       x: "t", y1: 0, y2: "level", fill: "var(--weather-rain)",
       interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2, fillOpacity: 0.5,
+    }),
+    Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
+    Plot.text([currentTime], {
+      x: d => d, y: 4.5, dy: 6,
+      text: d => { const h = d.getHours(), m = d.getMinutes(); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`; },
+      rotate: -90, fontSize: 10,
+      fill: MUTED, fontWeight: 600,
+      stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
     }),
     Plot.ruleX(data, Plot.pointerX({x: "t", stroke: INK, strokeOpacity: 0.45})),
     Plot.tip(rainData, Plot.pointerX({
