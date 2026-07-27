@@ -347,8 +347,9 @@ const tempPanel = panel({
         return {
           ...d,
           x: new Date((visStart + visEnd) / 2),
-        src: moonSVGDataURL(d.moonPhase, 24, 0.3 + (d.moonIllumination ?? 0) * 0.65),
-      }));
+          src: moonSVGDataURL(d.moonPhase, 24, 0.3 + (d.moonIllumination ?? 0) * 0.65),
+        };
+      });
       moonMarks = [
         Plot.image(midpoints, {
           x: "x",
