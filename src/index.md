@@ -202,7 +202,7 @@ currentTime;
 function frame(yDomain, {showXAxis = false} = {}) {
   return [
     Plot.rect(bands.days, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-day)", fillOpacity: 0.06}),
-    Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: d => 0.16 - (d.moonIllumination ?? 0.5) * 0.10}),
+    Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: d => 0.22 - (d.moonIllumination ?? 0.5) * 0.20}),
     Plot.ruleX(
       d3.timeDay.range(xDomain[0], xDomain[1]),
       {stroke: FAINT, strokeWidth: 1, strokeOpacity: 0.35}
@@ -327,11 +327,10 @@ const tempPanel = panel({
       moonMarks = [
         Plot.image(midpoints, {
           x: "x",
-          y: tempDomain[1],
+          y: (tempDomain[0] + tempDomain[1]) / 2,
           src: d => d.src,
           width: 24,
           height: 24,
-          dy: 16,
           title: d => d.title,
         }),
       ];
