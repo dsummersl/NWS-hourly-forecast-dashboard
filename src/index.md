@@ -389,8 +389,8 @@ const tempPanel = panel({
       Plot.line(data, {x: "t", y: "dewpoint", stroke: C.dew, strokeWidth: 2, curve: "monotone-x"}),
       Plot.line(data, {x: "t", y: "apparent", stroke: C.feels, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
       Plot.line(data, {x: "t", y: "temperature", stroke: C.temp, strokeWidth: 2, curve: "monotone-x"}),
-      chartLabel("Temperature"),
       ...moonMarks,
+      chartLabel("Temperature"),
       Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
       Plot.text([currentTime], {
         x: d => d, y: tempDomain[1], dy: 6,
