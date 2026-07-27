@@ -16,10 +16,23 @@ const urlParams = new URLSearchParams(location.search);
 const initialLat = parseFloat(urlParams.get("lat")) || DEFAULT_LAT;
 const initialLon = parseFloat(urlParams.get("lon")) || DEFAULT_LON;
 const initialHours = parseInt(urlParams.get("hours")) || 48;
+```
 
-const raw = Mutable(null);
+```js
+// Initial data is a Promise; the framework auto-awaits it for other cells.
+const initialData = fetchForecast(initialLat, initialLon);
+```
 
-fetchForecast(initialLat, initialLon).then(data => { raw.value = data; });
+```js
+// Runtime Mutable — kept in its own cell so it never re-evaluates.
+// window ref allows updateLocation (another cell) to set .value.
+const runtimeData = Mutable(null);
+window.__runtimeData = runtimeData;
+```
+
+```js
+// Use runtime data when available, otherwise the initial fetch.
+const raw = runtimeData ?? initialData;
 
 // Location picker UI
 const picker = html`<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem;">
@@ -33,7 +46,7 @@ const goEl = picker.querySelector("#loc-go");
 async function updateLocation(lat, lon) {
   try {
     const data = await fetchForecast(lat, lon);
-    if (raw) raw.value = data;
+    if (window.__runtimeData) window.__runtimeData.value = data;
     const p = new URLSearchParams(location.search);
     p.set("lat", Number(lat).toFixed(4));
     p.set("lon", Number(lon).toFixed(4));
@@ -169,11 +182,11 @@ const compass = (deg) =>
 
 ```
 
-# Hourly forecast — ${loc.city}, ${loc.state}
+# ${loc.city}, ${loc.state}
 
 <div class="meta" style="margin-bottom: 0.5rem;">
-  ${loc.lat}°, ${loc.lon}° · ${loc.elevation_ft} ft · NWS ${loc.office} grid ${loc.gridX},${loc.gridY} ·
-  forecast issued ${updatedAt.toLocaleString("en-US", {weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: loc.timeZone})} ${tzLabel}
+  Hourly forecast for ${loc.lat}°, ${loc.lon}° · ${loc.elevation_ft} ft · NWS ${loc.office} grid ${loc.gridX},${loc.gridY} ·
+  issued ${updatedAt.toLocaleString("en-US", {weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: loc.timeZone})} ${tzLabel}
 </div>
 
 ${picker}
@@ -492,7 +505,34 @@ const thunderPanel = weatherPanel(thunderData, "Thunder", "var(--weather-thunder
 const fogPanel = weatherPanel(fogData, "Fog", "var(--weather-fog)");
 ```
 
-<div class="card" style="padding:0;border:none;background:none;border-radius:0;box-shadow:none;">
+```js
+// Active weather alerts callout
+const SEVERITY_COLORS = {
+  Extreme: "var(--alert-extreme)",
+  Severe: "var(--alert-severe)",
+  Moderate: "var(--alert-moderate)",
+  Minor: "var(--alert-minor)",
+};
+
+const alertEntries = raw?.alerts;
+const alertCallout = !alertEntries?.length ? null : html`<div style="margin-bottom:1rem;">
+  ${alertEntries.map(a => html`<details style="border-left:4px solid ${SEVERITY_COLORS[a.severity] || 'var(--alert-minor)'};background:var(--theme-background);padding:0.5rem 1rem;margin-bottom:0.5rem;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    <summary style="cursor:pointer;display:flex;align-items:center;gap:0.5rem;list-style:none;">
+      <span style="font-size:1.1rem;">⚠</span>
+      <strong>${a.event}</strong>
+      <span style="font-size:0.75rem;font-weight:600;text-transform:uppercase;padding:1px 6px;border-radius:3px;color:#fff;background:${SEVERITY_COLORS[a.severity] || 'var(--alert-minor)'};">${a.severity}</span>
+    </summary>
+    <div style="margin-top:0.5rem;font-size:0.85rem;">
+      <div style="color:var(--theme-foreground-muted);margin-bottom:0.5rem;">${a.headline}</div>
+      ${a.description ? html`<div style="margin-bottom:0.5rem;white-space:pre-wrap;">${a.description}</div>` : null}
+      ${a.instruction ? html`<div style="font-weight:600;white-space:pre-wrap;">${a.instruction}</div>` : null}
+    </div>
+  </details>`)}
+</div>`;
+```
+
+<div class="card chart-container" style="padding:0;border:none;background:none;border-radius:0;box-shadow:none;">
+  ${alertCallout}
   ${resize(tempPanel)}
   ${resize(skyPrecipRhPanel)}
   ${resize(windPanel)}
@@ -501,19 +541,67 @@ const fogPanel = weatherPanel(fogData, "Fog", "var(--weather-fog)");
   ${resize(fogPanel)}
 </div>
 
-<div class="card" style="padding:0;border:none;background:none;border-radius:0;box-shadow:none;">
-<h2>Sources</h2>
+```js
+// Hover state for the bottom summary section
+const hoveredIdx = Mutable(null);
+window.__hoveredIdx = hoveredIdx;
 
-Every number on this page comes from one place: the **National Weather Service API**,
-which serves the same National Digital Forecast Database grid that
-[forecast.weather.gov's graphical forecast](https://forecast.weather.gov/MapClick.php?w0=t&w2=wc&w3=sfcwind&w3u=1&w4=sky&w13u=0&w14u=1&w15u=1&AheadHour=0&Submit=Submit&FcstType=graphical&textField1=${loc.lat}&textField2=${loc.lon}&site=all&unit=0&dd=&bw=)
-renders as server-side PNGs.
+// Track pointer position over the chart area
+{
+  data; xDomain;
+  const el = document.querySelector(".chart-container");
+  if (el) {
+    const handler = (e) => {
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const w = rect.width;
+      const scale = d3.scaleTime().domain(xDomain).range([MARGIN.left, w - MARGIN.right]);
+      const nearest = d3.minIndex(data, d => Math.abs(d.t - scale.invert(mx)));
+      if (window.__hoveredIdx.value !== nearest) window.__hoveredIdx.value = nearest;
+    };
+    const leave = () => { window.__hoveredIdx.value = null; };
+    el.addEventListener("pointermove", handler);
+    el.addEventListener("pointerleave", leave);
+  }
+}
+```
 
-<ul>
-<li>Grid cell: ${html`<a href="https://api.weather.gov/gridpoints/${loc.office}/${loc.gridX},${loc.gridY}"><code>/gridpoints/${loc.office}/${loc.gridX},${loc.gridY}</code></a>`} — issued by NWS ${loc.office}.</li>
-<li>Sunrise/sunset are computed locally (NOAA low-precision almanac) for the night bands; the API does not supply them.</li>
-</ul>
+```js
+const hi = hoveredIdx;
+const h = hi != null ? rows[hi] : now;
+const feelsLike = S.heatIndex?.[h.i] ?? S.apparentTemperature?.[h.i];
+const rainLevel = S.weather?.rain?.[h.i];
+const thunderLevel = S.weather?.thunder?.[h.i];
+const covLabel = (lvl) => lvl ? COVERAGE_LABELS[lvl] : "-";
+```
+
+## ${h.t.toLocaleString("en-US", {weekday: "long", month: "long", day: "numeric", hour: "numeric"})}
+
+<div class="grid grid-cols-4">
+  <div class="grid">
+    Temperature: ${fmt(h.temperature, "°F")}<br>
+    Dewpoint: ${fmt(h.dewpoint, "°F")}
+  </div>
+  <div class="grid">
+    Heat Index: ${fmt(feelsLike, "°F")}<br>
+    Surface Wind: ${compass(h.windDirection)} ${fmt(h.windSpeed, "mph")}
+  </div>
+  <div class="grid">
+    Sky Cover: ${fmt(h.skyCover, "%")}<br>
+    Precip Potential: ${fmt(h.precipChance, "%")}
+  </div>
+  <div class="grid">
+    Humidity: ${fmt(h.humidity, "%")}<br>
+    Rain: ${covLabel(rainLevel)}<br>
+    Thunder: ${covLabel(thunderLevel)}
+  </div>
 </div>
+
+## Sources
+
+- National Digital Forecast Database grid that [forecast.weather.gov's graphical forecast](https://forecast.weather.gov/MapClick.php?w0=t&w2=wc&w3=sfcwind&w3u=1&w4=sky&w13u=0&w14u=1&w15u=1&AheadHour=0&Submit=Submit&FcstType=graphical&textField1=${loc.lat}&textField2=${loc.lon}&site=all&unit=0&dd=&bw=)
+- Grid cell: ${html`<a href="https://api.weather.gov/gridpoints/${loc.office}/${loc.gridX},${loc.gridY}"><code>/gridpoints/${loc.office}/${loc.gridX},${loc.gridY}</code></a>`} — issued by NWS ${loc.office}.
+- Sunrise/sunset are computed locally (NOAA low-precision almanac) for the night bands; the API does not supply them.
 
 <style>
 .big { font-size: 2rem; font-weight: 600; line-height: 1.2; display: block; }
@@ -535,7 +623,14 @@ renders as server-side PNGs.
   --weather-thunder:#8b5cf6;
   --weather-fog:   #9ca3af;
   --qpf-text: #1a1a2e;
+  --alert-extreme: #dc2626;
+  --alert-severe: #ea580c;
+  --alert-moderate: #ca8a04;
+  --alert-minor: #6b7280;
 }
+details summary::-webkit-details-marker { display:none; }
+details > summary::marker { display:none; content:""; }
+details summary { user-select:none; }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme~="light"])) {
     --series-temp:  #d95926;

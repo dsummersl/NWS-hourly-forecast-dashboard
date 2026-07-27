@@ -179,6 +179,19 @@ export async function fetchForecast(lat, lon, hours = 168) {
     }));
   } catch (_) {}
 
+  // Active alerts
+  let alerts = [];
+  try {
+    const alertRes = await get(`${API}/alerts/active?point=${Number(lat).toFixed(4)},${Number(lon).toFixed(4)}`);
+    alerts = (alertRes.features || []).map(f => ({
+      event: f.properties.event,
+      headline: f.properties.headline,
+      severity: f.properties.severity,
+      description: f.properties.description,
+      instruction: f.properties.instruction,
+    }));
+  } catch (_) {}
+
   const loc = point.relativeLocation.properties;
   return {
     generated: new Date().toISOString(),
@@ -194,5 +207,6 @@ export async function fetchForecast(lat, lon, hours = 168) {
     series,
     sun,
     periods,
+    alerts,
   };
 }
