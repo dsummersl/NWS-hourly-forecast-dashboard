@@ -18,6 +18,7 @@ const urlParams = new URLSearchParams(location.search);
 const initialLat = parseFloat(urlParams.get("lat")) || DEFAULT_LAT;
 const initialLon = parseFloat(urlParams.get("lon")) || DEFAULT_LON;
 const initialHours = parseInt(urlParams.get("hours")) || 48;
+const moonPhaseOverride = parseFloat(urlParams.get("moonPhase"));
 ```
 
 ```js
@@ -116,7 +117,14 @@ const tzLabel = new Intl.DateTimeFormat("en-US", {timeZone: loc.timeZone, timeZo
 ```
 
 ```js
-const bands = buildBands(raw.hours, raw.sun, raw.moon, loc.timeZone);
+const moonData = moonPhaseOverride != null && !isNaN(moonPhaseOverride)
+  ? raw.moon.map(m => {
+      const p = Math.max(0, Math.min(1, moonPhaseOverride));
+      const illum = (1 - Math.cos(p * 2 * Math.PI)) / 2;
+      return {...m, phase: p, illumination: illum};
+    })
+  : raw.moon;
+const bands = buildBands(raw.hours, raw.sun, moonData, loc.timeZone);
 ```
 
 ```js
