@@ -1,6 +1,7 @@
 import {describe, it, expect} from "vitest";
 import {SearchRiseSet, Illumination, MoonPhase, Body, Observer, MakeTime} from "astronomy-engine";
 import {moonPhaseName} from "../src/nws-client.js";
+import {buildSunLookup, isHourNight} from "../src/bands.js";
 
 describe("moonPhaseName", () => {
   it("returns New Moon for angle 0", () => {
@@ -163,31 +164,22 @@ describe("astronomy-engine sunrise/sunset", () => {
 
 describe("band calculation logic", () => {
   it("classifies day/night hours with actual sun data", () => {
-    const sunLookup = new Map();
-    sunLookup.set("2026-07-27", {
-      sunrise: new Date("2026-07-27T10:20:00Z"),
-      sunset: new Date("2026-07-28T00:25:00Z"),
-    });
-    sunLookup.set("2026-07-28", {
-      sunrise: new Date("2026-07-28T10:21:00Z"),
-      sunset: new Date("2026-07-29T00:24:00Z"),
-    });
+    const sunEntries = [
+      {date: "2026-07-27", sunrise: "2026-07-27T10:20:00Z", sunset: "2026-07-28T00:25:00Z"},
+      {date: "2026-07-28", sunrise: "2026-07-28T10:21:00Z", sunset: "2026-07-29T00:24:00Z"},
+    ];
+    const sunLookup = buildSunLookup(sunEntries, "America/New_York");
 
     const rows = [
-      {t: new Date("2026-07-27T08:00:00")},
-      {t: new Date("2026-07-27T12:00:00")},
-      {t: new Date("2026-07-27T16:00:00")},
-      {t: new Date("2026-07-28T00:00:00")},
-      {t: new Date("2026-07-28T04:00:00")},
-      {t: new Date("2026-07-28T08:00:00")},
+      "2026-07-27T08:00",
+      "2026-07-27T12:00",
+      "2026-07-27T16:00",
+      "2026-07-28T00:00",
+      "2026-07-28T04:00",
+      "2026-07-28T08:00",
     ];
 
-    const isNight = rows.map(r => {
-      const dateStr = r.t.toISOString().slice(0, 10);
-      const s = sunLookup.get(dateStr);
-      if (!s || !s.sunrise || !s.sunset) return null;
-      return r.t < s.sunrise || r.t >= s.sunset;
-    });
+    const isNight = rows.map(h => isHourNight(h, sunLookup));
 
     expect(isNight[0]).toBe(false); // 8 AM: day
     expect(isNight[1]).toBe(false); // noon: day
