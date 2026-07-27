@@ -314,21 +314,26 @@ const tempPanel = panel({
     const moonBands = bands.nights.filter(d => {
       if (d.moonPhase == null) return false;
       const hours = (d.end.getTime() - d.start.getTime()) / 3600000;
-      return hours >= 3;
+      if (hours < 3) return false;
+      if (d.start.getTime() <= xDomain[0].getTime()) return false;
+      if (d.end.getTime() - 3600000 >= xDomain[1].getTime()) return false;
+      return true;
     });
+    const moonInfoMap = new Map();
+    for (const band of bands.nights) {
+      if (band.moonPhase == null) continue;
+      const info = `${band.moonName}  ${(band.moonIllumination * 100).toFixed(0)}% illuminated`;
+      for (let t = band.start.getTime(); t < band.end.getTime(); t += 3600000) {
+        moonInfoMap.set(t, info);
+      }
+    }
     let moonMarks = [];
     if (moonBands.length) {
-      const [domainStart, domainEnd] = xDomain;
-      const midpoints = moonBands.map(d => {
-        const visStart = new Date(Math.max(d.start.getTime(), domainStart.getTime()));
-        const visEnd = new Date(Math.min(d.end.getTime(), domainEnd.getTime()));
-        return {
-          ...d,
-          x: new Date((visStart.getTime() + visEnd.getTime()) / 2),
-          src: moonSVGDataURL(d.moonPhase, 24, 0.3 + (d.moonIllumination ?? 0) * 0.65),
-          title: `${d.moonName}\n${(d.moonIllumination * 100).toFixed(0)}% illuminated`,
-        };
-      });
+      const midpoints = moonBands.map(d => ({
+        ...d,
+        x: new Date((d.start.getTime() + d.end.getTime()) / 2),
+        src: moonSVGDataURL(d.moonPhase, 24, 0.3 + (d.moonIllumination ?? 0) * 0.65),
+      }));
       moonMarks = [
         Plot.image(midpoints, {
           x: "x",
@@ -337,7 +342,6 @@ const tempPanel = panel({
           width: 24,
           height: 24,
           dy: 16,
-          title: d => d.title,
         }),
       ];
     }
@@ -357,12 +361,17 @@ const tempPanel = panel({
         stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
       }),
       ...hoverPips(tempSeries),
-      ...crosshair("temperature", (d) => [
-        `Temp  ${fmt(d.temperature, "°F")}`,
-        `Feels like  ${fmt(S.apparentTemperature?.[d.i], "°F")}`,
-        `Dew point  ${fmt(d.dewpoint, "°F")}`,
-        `Humidity  ${fmt(d.humidity, "%")}`,
-      ]),
+      ...crosshair("temperature", (d) => {
+        const lines = [
+          `Temp  ${fmt(d.temperature, "°F")}`,
+          `Feels like  ${fmt(S.apparentTemperature?.[d.i], "°F")}`,
+          `Dew point  ${fmt(d.dewpoint, "°F")}`,
+          `Humidity  ${fmt(d.humidity, "%")}`,
+        ];
+        const moonInfo = moonInfoMap.get(d.t.getTime());
+        if (moonInfo) lines.push(moonInfo);
+        return lines;
+      }),
     ];
   },
 });
