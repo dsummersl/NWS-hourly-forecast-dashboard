@@ -23,7 +23,7 @@ const initialHours = parseInt(urlParams.get("hours")) || 48;
 ```js
 // Register service worker for PWA support
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
+  navigator.serviceWorker.register('sw.js', {type: 'module'});
 }
 ```
 
