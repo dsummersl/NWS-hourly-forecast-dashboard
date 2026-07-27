@@ -17,7 +17,6 @@ export function moonSVGDataURL(phase, size = 20, opacity = 1) {
   const theta = phase * 2 * Math.PI;
   const cosT = Math.cos(theta);
   const rx = Math.max(Math.abs(cosT) * R, 0.5);
-  const sweep = cosT > 0 ? 0 : 1;
 
   let body;
   if (phase < 0.002 || phase > 0.998) {
@@ -25,8 +24,12 @@ export function moonSVGDataURL(phase, size = 20, opacity = 1) {
   } else if (Math.abs(phase - 0.5) < 0.002) {
     body = `<circle cx="0" cy="0" r="${R}" fill="#ffffff" fill-opacity="${opacity}"/>`;
   } else if (phase < 0.5) {
+    // Waxing: right side lit. Terminator bows right for crescent, left for gibbous.
+    const sweep = cosT > 0 ? 1 : 0;
     body = `<path d="M 0,${-R} A ${R},${R} 0 0,1 0,${R} A ${rx},${R} 0 0,${sweep} 0,${-R} Z" fill="#ffffff" fill-opacity="${opacity}"/>`;
   } else {
+    // Waning: left side lit. Terminator bows left for crescent, right for gibbous.
+    const sweep = cosT > 0 ? 0 : 1;
     body = `<path d="M 0,${-R} A ${R},${R} 0 0,0 0,${R} A ${rx},${R} 0 0,${sweep} 0,${-R} Z" fill="#ffffff" fill-opacity="${opacity}"/>`;
   }
 
