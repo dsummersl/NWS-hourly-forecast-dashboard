@@ -210,7 +210,7 @@ currentTime;
 function frame(yDomain, {showXAxis = false} = {}) {
   return [
     Plot.rect(bands.days, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-day)", fillOpacity: 0.06}),
-    Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: d => 0.24 - (d.moonIllumination ?? 0.5) * 0.20}),
+    Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: d => 0.28 - (d.moonIllumination ?? 0.5) * 0.20}),
     Plot.ruleX(
       d3.timeDay.range(xDomain[0], xDomain[1]),
       {stroke: FAINT, strokeWidth: 1, strokeOpacity: 0.35}
@@ -691,7 +691,7 @@ const covLabel = (lvl) => lvl ? COVERAGE_LABELS[lvl] : "-";
   --series-feels: #1baf7a;  /* aqua   */
   --series-wind:  #5b9bd5;  /* lighter blue for surface wind */
   --series-gust:  #e87ba4;  /* magenta */
-  --band-night: #191970;    /* midnight blue */
+  --band-night: #16162a;    /* deep twilight gray */
   --band-day:   #ecd9a0;    /* warm straw */
   --series-humid:   #22c55e;  /* green */
   --weather-rain:   #2a78d6;
@@ -713,7 +713,7 @@ details summary { user-select:none; }
     --series-feels: #199e70;
     --series-wind:  #3987e5;
     --series-gust:  #d55181;
-    --band-night: #2a3f6b;
+    --band-night: #12121e;
     --band-day:   #3a3520;
     --weather-rain:   #3987e5;
     --weather-thunder:#a78bfa;
