@@ -318,12 +318,17 @@ const tempPanel = panel({
     });
     let moonMarks = [];
     if (moonBands.length) {
-      const midpoints = moonBands.map(d => ({
-        ...d,
-        x: new Date((d.start.getTime() + d.end.getTime()) / 2),
-        src: moonSVGDataURL(d.moonPhase, 24, 0.3 + (d.moonIllumination ?? 0) * 0.65),
-        title: `${d.moonName}\n${(d.moonIllumination * 100).toFixed(0)}% illuminated`,
-      }));
+      const [domainStart, domainEnd] = xDomain;
+      const midpoints = moonBands.map(d => {
+        const visStart = new Date(Math.max(d.start.getTime(), domainStart.getTime()));
+        const visEnd = new Date(Math.min(d.end.getTime(), domainEnd.getTime()));
+        return {
+          ...d,
+          x: new Date((visStart.getTime() + visEnd.getTime()) / 2),
+          src: moonSVGDataURL(d.moonPhase, 24, 0.3 + (d.moonIllumination ?? 0) * 0.65),
+          title: `${d.moonName}\n${(d.moonIllumination * 100).toFixed(0)}% illuminated`,
+        };
+      });
       moonMarks = [
         Plot.image(midpoints, {
           x: "x",
