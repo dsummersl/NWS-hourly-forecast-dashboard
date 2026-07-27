@@ -419,7 +419,7 @@ const tempPanel = panel({
 ```js
 frame;
 const skyPrecipRhSeries = [
-  {key: "skyCover", label: "Sky cover", fill: MUTED},
+  {key: "skyCover", label: "Sky cover", fill: "var(--series-sky)"},
   {key: "humidity", label: "Humidity", fill: "var(--series-humid)"},
   {key: "precipChance", label: "Precip", fill: C.dew},
 ];
@@ -430,9 +430,9 @@ const skyPrecipRhPanel = panel({
   yTicks: [0, 50, 100],
   height: 190,
   showXAxis: true,
-  marks: () => [
-    Plot.areaY(data, {x: "t", y: "skyCover", fill: MUTED, fillOpacity: 0.15, curve: "monotone-x"}),
-    Plot.line(data, {x: "t", y: "skyCover", stroke: MUTED, strokeWidth: 2, curve: "monotone-x"}),
+  marks: (pw) => [
+    Plot.areaY(data, {x: "t", y: "skyCover", fill: "var(--series-sky)", fillOpacity: 0.12, curve: "monotone-x"}),
+    Plot.line(data, {x: "t", y: "skyCover", stroke: "var(--series-sky)", strokeWidth: 1.5, curve: "monotone-x"}),
     Plot.line(data, {x: "t", y: "humidity", stroke: "var(--series-humid)", strokeWidth: 2, curve: "monotone-x"}),
     Plot.line(data, {x: "t", y: "precipChance", stroke: C.dew, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
     chartLabel("Sky, Humidity & Precip"),
@@ -722,6 +722,7 @@ const covLabel = (lvl) => lvl ? COVERAGE_LABELS[lvl] : "-";
   --series-gust:  #e87ba4;
   --band-night: #16162a;
   --band-day:   #ecd9a0;
+  --series-sky:   #9ca3af;
   --series-humid:   #22c55e;
   --weather-rain:   #2a78d6;
   --weather-thunder:#8b5cf6;
@@ -748,6 +749,7 @@ details summary { user-select:none; }
     --weather-rain:   #3987e5;
     --weather-thunder:#a78bfa;
     --weather-fog:   #6b7280;
+    --series-sky:   #6b7280;
     --series-humid:   #16a34a;
     --qpf-text: #fff;
     --moon-fill: #f0e6c0;
@@ -764,6 +766,7 @@ details summary { user-select:none; }
   --weather-rain:   #3987e5;
   --weather-thunder:#a78bfa;
   --weather-fog:   #6b7280;
+  --series-sky:   #6b7280;
   --series-humid:   #16a34a;
   --qpf-text: #fff;
   --moon-fill: #f0e6c0;
