@@ -315,8 +315,8 @@ const tempPanel = panel({
       if (d.moonPhase == null) return false;
       const hours = (d.end.getTime() - d.start.getTime()) / 3600000;
       if (hours < 3) return false;
-      if (d.start.getTime() <= xDomain[0].getTime()) return false;
-      if (d.end.getTime() - 3600000 >= xDomain[1].getTime()) return false;
+      const mid = (d.start.getTime() + d.end.getTime()) / 2;
+      if (mid <= xDomain[0].getTime() || mid >= xDomain[1].getTime()) return false;
       return true;
     });
     const moonInfoMap = new Map();
