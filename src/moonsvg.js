@@ -11,30 +11,27 @@ export function moonPhaseName(angle) {
   return "New Moon";
 }
 
-export function moonSVGDataURL(phase, size = 20, opacity = 1) {
+export function moonSVGDataURL(phase, size = 20, opacity = 1, fill = "#ffffff") {
   if (phase == null) return null;
   const R = size / 2 - 1.5;
   const theta = phase * 2 * Math.PI;
   const cosT = Math.cos(theta);
   const rx = Math.max(Math.abs(cosT) * R, 0.5);
 
+  const lit = `fill="${fill}" fill-opacity="${opacity}"`;
+  const stroke = `stroke="${fill}" stroke-width="1.5"`;
+
   let body;
   if (phase < 0.002 || phase > 0.998) {
-    body = `<circle cx="0" cy="0" r="${R}" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="${opacity * 0.4}"/>`;
+    body = `<circle cx="0" cy="0" r="${R}" fill="none" ${stroke} opacity="${opacity * 0.4}"/>`;
   } else if (Math.abs(phase - 0.5) < 0.002) {
-    body = `<circle cx="0" cy="0" r="${R}" fill="#ffffff" fill-opacity="${opacity}"/>`;
+    body = `<circle cx="0" cy="0" r="${R}" ${lit} />`;
   } else if (phase < 0.5) {
-    // Waxing: right side lit
-    // Crescent (phase < 0.25): terminator opposite sweep (0)
-    // Gibbous (phase >= 0.25): terminator same sweep (1)
     const termSweep = phase < 0.25 ? 0 : 1;
-    body = `<path d="M 0,${-R} A ${R},${R} 0 0,1 0,${R} A ${rx},${R} 0 0,${termSweep} 0,${-R} Z" fill="#ffffff" fill-opacity="${opacity}"/>`;
+    body = `<path d="M 0,${-R} A ${R},${R} 0 0,1 0,${R} A ${rx},${R} 0 0,${termSweep} 0,${-R} Z" ${lit} />`;
   } else {
-    // Waning: left side lit
-    // Gibbous (phase < 0.75): terminator same sweep (0)
-    // Crescent (phase >= 0.75): terminator opposite sweep (1)
     const termSweep = phase < 0.75 ? 0 : 1;
-    body = `<path d="M 0,${-R} A ${R},${R} 0 0,0 0,${R} A ${rx},${R} 0 0,${termSweep} 0,${-R} Z" fill="#ffffff" fill-opacity="${opacity}"/>`;
+    body = `<path d="M 0,${-R} A ${R},${R} 0 0,0 0,${R} A ${rx},${R} 0 0,${termSweep} 0,${-R} Z" ${lit} />`;
   }
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-${size / 2} -${size / 2} ${size} ${size}" width="${size}" height="${size}">${body}</svg>`;

@@ -28,6 +28,16 @@ if ('serviceWorker' in navigator) {
 ```
 
 ```js
+// Theme change tick — Mutable that increments when data-theme changes,
+// so cells that reference it re-evaluate and update moon colors, etc.
+const themeTick = Mutable(0);
+{
+  const obs = new MutationObserver(() => { themeTick.value++; });
+  obs.observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+}
+```
+
+```js
 // Initial data is a Promise; the framework auto-awaits it for other cells.
 const initialData = fetchForecast(initialLat, initialLon);
 ```
@@ -219,12 +229,17 @@ const MUTED = "var(--theme-foreground-muted)";
 const FAINT = "var(--theme-foreground-faint)";
 
 const PANEL_HEIGHT = 190;
-const MARGIN = {left: 46, right: 82, top: 16, bottom: 24};
+const MARGIN = {left: 46, right: 16, top: 16, bottom: 24};
 
 // Every panel shares one x scale and one set of background marks, so the stack reads as
 // a single meteogram rather than five unrelated charts.
 currentTime;
-function frame(yDomain, {showXAxis = false} = {}) {
+function frame(yDomain, {showXAxis = false, pw = 1000} = {}) {
+  const tickHours = pw < 400
+    ? (hoursShown <= 24 ? 6 : hoursShown <= 48 ? 12 : 24)
+    : pw < 700
+      ? (hoursShown <= 24 ? 4 : hoursShown <= 48 ? 8 : 12)
+      : (hoursShown <= 24 ? 3 : hoursShown <= 48 ? 6 : 12);
   return [
     Plot.rect(bands.days, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-day)", fillOpacity: 0.06}),
     Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: d => 0.28 - (d.moonIllumination ?? 0.5) * 0.20}),
@@ -233,7 +248,7 @@ function frame(yDomain, {showXAxis = false} = {}) {
       {stroke: FAINT, strokeWidth: 1, strokeOpacity: 0.35}
     ),
     Plot.axisX({
-      ticks: d3.timeHour.every(hoursShown <= 24 ? 3 : hoursShown <= 48 ? 6 : 12),
+      ticks: d3.timeHour.every(tickHours),
       tickFormat: (t) => t.getHours() === 0 ? d3.timeFormat("%a")(t) : d3.timeFormat("%-I%p")(t).toLowerCase(),
       tickSize: 0,
       fontSize: 10,
@@ -243,25 +258,15 @@ function frame(yDomain, {showXAxis = false} = {}) {
   ];
 }
 
-// Direct labels at the right edge, nudged apart so two series that end at similar
-// values don't stack their text on top of each other.
-function endLabels(series, yDomain, height) {
-  const usable = height - MARGIN.top - MARGIN.bottom;
-  const minGap = ((yDomain[1] - yDomain[0]) * 14) / usable;
-  const pts = series
-    .map(s => {
-      const last = [...data].reverse().find(d => d[s.key] != null);
-      return last ? {y: last[s.key], label: s.label, fill: s.fill} : null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.y - b.y);
-  for (let i = 1; i < pts.length; i++) {
-    if (pts[i].y - pts[i - 1].y < minGap) pts[i].y = pts[i - 1].y + minGap;
-  }
-  return Plot.text(pts, {
-    x: xDomain[1], y: "y", text: "label", fill: d => d.fill,
-    textAnchor: "start", dx: 6, fontSize: 11, fontWeight: 600,
-  });
+// Inline legend rendered below each panel instead of right-edge labels.
+function legend(series) {
+  if (!series?.length) return null;
+  return html`<div style="display:flex;gap:1.2rem;flex-wrap:wrap;font:11px var(--sans-serif);margin:0 46px;min-height:18px;">
+    ${series.map(s => html`<span style="display:inline-flex;align-items:center;gap:4px;">
+      <span style="width:10px;height:10px;border-radius:2px;background:${s.fill};display:inline-block;"></span>
+      ${s.label}
+    </span>`)}
+  </div>`;
 }
 
 // One shared crosshair + readout per panel. An hourly forecast is read by picking an
@@ -311,13 +316,14 @@ function panel({yDomain, yLabel, yTicks, yTickFormat, marks, height = PANEL_HEIG
     x: {type: "time", domain: xDomain, label: null},
     y: {domain: yDomain, label: yLabel, labelAnchor: "center", grid: true, ticks: yTicks, tickSize: 0, nice: false, tickFormat: yTickFormat},
     style: {fontSize: "11px"},
-    marks: [...frame(yDomain, {showXAxis}), ...marks(width)],
+    marks: [...frame(yDomain, {showXAxis, pw: width}), ...marks(width)],
   });
 }
 ```
 
 ```js
 frame;
+themeTick;
 const tempDomain = (() => {
   const vals = data.flatMap(d => [d.temperature, d.dewpoint, d.apparent]).filter(v => v != null);
   const [lo, hi] = d3.extent(vals);
@@ -335,7 +341,7 @@ const tempPanel = panel({
   yDomain: tempDomain,
   yLabel: "°F",
   showXAxis: true,
-  marks: () => {
+  marks: (pw) => {
     const moonBands = bands.nights.filter(d => {
       if (d.moonPhase == null) return false;
       const totalHours = (d.end.getTime() - d.start.getTime()) / 3600000;
@@ -356,6 +362,7 @@ const tempPanel = panel({
         moonInfoMap.set(t, info);
       }
     }
+    const moonSize = Math.min(24, Math.max(14, pw * 0.035));
     let moonMarks = [];
     if (moonBands.length) {
       const midpoints = moonBands.map(d => {
@@ -364,7 +371,7 @@ const tempPanel = panel({
         return {
           ...d,
           x: new Date((visStart + visEnd) / 2),
-          src: moonSVGDataURL(d.moonPhase, 24, 0.3 + (d.moonIllumination ?? 0) * 0.65),
+          src: moonSVGDataURL(d.moonPhase, moonSize, 0.3 + (d.moonIllumination ?? 0) * 0.65, getComputedStyle(document.documentElement).getPropertyValue('--moon-fill').trim() || '#ffffff'),
         };
       });
       moonMarks = [
@@ -372,9 +379,9 @@ const tempPanel = panel({
           x: "x",
           y: tempDomain[1],
           src: d => d.src,
-          width: 24,
-          height: 24,
-          dy: 16,
+          width: moonSize,
+          height: moonSize,
+          dy: moonSize * 0.67,
         }),
       ];
     }
@@ -382,7 +389,6 @@ const tempPanel = panel({
       Plot.line(data, {x: "t", y: "dewpoint", stroke: C.dew, strokeWidth: 2, curve: "monotone-x"}),
       Plot.line(data, {x: "t", y: "apparent", stroke: C.feels, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
       Plot.line(data, {x: "t", y: "temperature", stroke: C.temp, strokeWidth: 2, curve: "monotone-x"}),
-      endLabels(tempSeries, tempDomain, PANEL_HEIGHT),
       chartLabel("Temperature"),
       ...moonMarks,
       Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
@@ -429,7 +435,6 @@ const skyPrecipRhPanel = panel({
     Plot.line(data, {x: "t", y: "skyCover", stroke: MUTED, strokeWidth: 2, curve: "monotone-x"}),
     Plot.line(data, {x: "t", y: "humidity", stroke: "var(--series-humid)", strokeWidth: 2, curve: "monotone-x"}),
     Plot.line(data, {x: "t", y: "precipChance", stroke: C.dew, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
-    endLabels(skyPrecipRhSeries, [0, 100], 190),
     chartLabel("Sky, Humidity & Precip"),
     Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
     Plot.text([currentTime], {
@@ -466,16 +471,15 @@ const windPanel = panel({
   yLabel: "mph",
   showXAxis: true,
   height: 210,
-  marks: () => [
+  marks: (pw) => [
     Plot.line(data, {x: "t", y: "windGust", stroke: C.gust, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
     Plot.line(data, {x: "t", y: "windSpeed", stroke: C.wind, strokeWidth: 2, curve: "monotone-x"}),
-    Plot.image(data.filter(d => d.windDirection != null && (hoursShown > 48 ? d.i % 2 === 0 : true)), {
+    Plot.image(data.filter(d => d.windDirection != null && d.i % Math.max(1, pw < 350 ? 3 : pw < 550 ? 2 : hoursShown > 48 ? 2 : 1) === 0), {
       x: "t", y: "windSpeed",
       src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='32' viewBox='-10 -16 20 32'%3E%3Ccircle cx='0' cy='0' r='1.3' fill='%23000'/%3E%3Cline x1='0' y1='0' x2='0' y2='14' stroke='%23777' stroke-width='0.6'/%3E%3Cline x1='0' y1='14' x2='7' y2='14' stroke='%23777' stroke-width='0.6'/%3E%3C/svg%3E",
       width: 20, height: 32,
       rotate: (d) => (d.windDirection ?? 0) - 180,
     }),
-    endLabels(windSeries, windDomain, 210),
     chartLabel("Wind"),
     Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
     Plot.text([currentTime], {
@@ -633,12 +637,12 @@ const alertCallout = !alertEntries?.length ? null : html`<div style="margin-bott
 
 <div class="card chart-container" style="padding:0;border:none;background:none;border-radius:0;box-shadow:none;">
   ${alertCallout || ""}
-  ${resize(tempPanel)}
-  ${resize(skyPrecipRhPanel)}
-  ${resize(windPanel)}
-  ${resize(rainPanel)}
-  ${resize(thunderPanel)}
-  ${resize(fogPanel)}
+  ${html`<div>${resize(tempPanel)}${legend(tempSeries)}</div>`}
+  ${html`<div>${resize(skyPrecipRhPanel)}${legend(skyPrecipRhSeries)}</div>`}
+  ${html`<div>${resize(windPanel)}${legend(windSeries)}</div>`}
+  ${html`<div>${resize(rainPanel)}${legend([{key:"rain",label:"Rain",fill:"var(--weather-rain)"},{key:"qpf",label:"QPF",fill:"var(--weather-rain)"}])}</div>`}
+  ${html`<div>${resize(thunderPanel)}${legend([{key:"thunder",label:"Thunder",fill:"var(--weather-thunder)"}])}</div>`}
+  ${html`<div>${resize(fogPanel)}${legend([{key:"fog",label:"Fog",fill:"var(--weather-fog)"}])}</div>`}
 </div>
 
 ```js
@@ -711,14 +715,14 @@ const covLabel = (lvl) => lvl ? COVERAGE_LABELS[lvl] : "-";
    own. Both modes are selected steps of the same four hues, each validated against its
    own surface — the dark column is not an automatic lightening of the light one. */
 :root {
-  --series-temp:  #eb6834;  /* orange */
-  --series-dew:   #2a78d6;  /* blue   */
-  --series-feels: #1baf7a;  /* aqua   */
-  --series-wind:  #5b9bd5;  /* lighter blue for surface wind */
-  --series-gust:  #e87ba4;  /* magenta */
-  --band-night: #16162a;    /* deep twilight gray */
-  --band-day:   #ecd9a0;    /* warm straw */
-  --series-humid:   #22c55e;  /* green */
+  --series-temp:  #eb6834;
+  --series-dew:   #2a78d6;
+  --series-feels: #1baf7a;
+  --series-wind:  #5b9bd5;
+  --series-gust:  #e87ba4;
+  --band-night: #16162a;
+  --band-day:   #ecd9a0;
+  --series-humid:   #22c55e;
   --weather-rain:   #2a78d6;
   --weather-thunder:#8b5cf6;
   --weather-fog:   #9ca3af;
@@ -727,6 +731,7 @@ const covLabel = (lvl) => lvl ? COVERAGE_LABELS[lvl] : "-";
   --alert-severe: #ea580c;
   --alert-moderate: #ca8a04;
   --alert-minor: #6b7280;
+  --moon-fill: #ffffff;
 }
 details summary::-webkit-details-marker { display:none; }
 details > summary::marker { display:none; content:""; }
@@ -738,13 +743,14 @@ details summary { user-select:none; }
     --series-feels: #199e70;
     --series-wind:  #3987e5;
     --series-gust:  #d55181;
-    --band-night: #12121e;
-    --band-day:   #3a3520;
+    --band-night: #1a2a4a;
+    --band-day:   #2a2820;
     --weather-rain:   #3987e5;
     --weather-thunder:#a78bfa;
     --weather-fog:   #6b7280;
     --series-humid:   #16a34a;
     --qpf-text: #fff;
+    --moon-fill: #f0e6c0;
   }
 }
 :root[data-theme~="dark"] {
@@ -753,12 +759,16 @@ details summary { user-select:none; }
   --series-feels: #199e70;
   --series-wind:  #3987e5;
   --series-gust:  #d55181;
-  --band-night: #2a3f6b;
-  --band-day:   #3a3520;
+  --band-night: #1a2a4a;
+  --band-day:   #2a2820;
   --weather-rain:   #3987e5;
   --weather-thunder:#a78bfa;
   --weather-fog:   #6b7280;
   --series-humid:   #16a34a;
   --qpf-text: #fff;
+  --moon-fill: #f0e6c0;
+}
+@media (max-width: 640px) {
+  #observablehq-center { margin: 1rem; }
 }
 </style>
