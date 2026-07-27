@@ -382,7 +382,7 @@ const windPanel = panel({
   marks: () => [
     Plot.line(data, {x: "t", y: "windGust", stroke: C.gust, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
     Plot.line(data, {x: "t", y: "windSpeed", stroke: C.wind, strokeWidth: 2, curve: "monotone-x"}),
-    Plot.image(data.filter(d => d.windDirection != null), {
+    Plot.image(data.filter(d => d.windDirection != null && (hoursShown > 48 ? d.i % 2 === 0 : true)), {
       x: "t", y: "windSpeed",
       src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='32' viewBox='-10 -16 20 32'%3E%3Ccircle cx='0' cy='0' r='1.3' fill='%23000'/%3E%3Cline x1='0' y1='0' x2='0' y2='14' stroke='%23777' stroke-width='0.6'/%3E%3Cline x1='0' y1='14' x2='7' y2='14' stroke='%23777' stroke-width='0.6'/%3E%3C/svg%3E",
       width: 20, height: 32,
