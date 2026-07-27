@@ -4,6 +4,8 @@ export default {
 
   root: "src",
 
+  dynamicPaths: ["/manifest.json", "/sw.js", "/icon.svg"],
+
   head: `
     <link rel="manifest" href="./manifest.json">
     <link rel="icon" type="image/svg+xml" href="./icon.svg">

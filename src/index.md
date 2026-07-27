@@ -21,6 +21,13 @@ const initialHours = parseInt(urlParams.get("hours")) || 48;
 ```
 
 ```js
+// Register service worker for PWA support
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+```
+
+```js
 // Initial data is a Promise; the framework auto-awaits it for other cells.
 const initialData = fetchForecast(initialLat, initialLon);
 ```
@@ -53,9 +60,22 @@ async function updateLocation(lat, lon) {
     p.set("lat", Number(lat).toFixed(4));
     p.set("lon", Number(lon).toFixed(4));
     history.replaceState(null, "", `?${p}`);
+    updateManifestLink(data.location);
   } catch (e) {
     console.error("Failed to fetch forecast:", e);
   }
+}
+
+function updateManifestLink(loc) {
+  if (!loc?.city || !loc?.state) return;
+  const link = document.querySelector('link[rel="manifest"]');
+  if (!link) return;
+  const p = new URLSearchParams();
+  p.set("city", loc.city);
+  p.set("state", loc.state);
+  p.set("lat", Number(loc.lat).toFixed(4));
+  p.set("lon", Number(loc.lon).toFixed(4));
+  link.href = `./manifest.json?${p}`;
 }
 
 goEl.addEventListener("click", async () => {
@@ -113,6 +133,11 @@ const start = rows[0].t;
 const updatedAt = new Date(raw.updated);
 const tzLabel = new Intl.DateTimeFormat("en-US", {timeZone: loc.timeZone, timeZoneName: "short"})
   .formatToParts(updatedAt).find(p => p.type === "timeZoneName").value;
+```
+
+```js
+// Update PWA manifest link whenever location changes
+updateManifestLink(loc);
 ```
 
 ```js
@@ -676,7 +701,7 @@ const covLabel = (lvl) => lvl ? COVERAGE_LABELS[lvl] : "-";
 
 - National Digital Forecast Database grid that [forecast.weather.gov's graphical forecast](https://forecast.weather.gov/MapClick.php?w0=t&w2=wc&w3=sfcwind&w3u=1&w4=sky&w13u=0&w14u=1&w15u=1&AheadHour=0&Submit=Submit&FcstType=graphical&textField1=${loc.lat}&textField2=${loc.lon}&site=all&unit=0&dd=&bw=)
 - Grid cell: ${html`<a href="https://api.weather.gov/gridpoints/${loc.office}/${loc.gridX},${loc.gridY}"><code>/gridpoints/${loc.office}/${loc.gridX},${loc.gridY}</code></a>`} — issued by NWS ${loc.office}.
-- Sunrise/sunset and moon phase are computed locally (astronomy-engine); the API does not supply them.
+- Sunrise/sunset and moon phase are computed locally (astronomy-engine).
 
 <style>
 .big { font-size: 2rem; font-weight: 600; line-height: 1.2; display: block; }
