@@ -1,5 +1,4 @@
-// Runtime NWS API client — ports the Python data loader to the browser
-// so users can change location without rebuilding.
+import {Observer, SearchRiseSet, Illumination, MoonPhase, Body, MakeTime} from "astronomy-engine";
 
 const API = "https://api.weather.gov";
 const UA = "(agentexperiments nws-forecast-viz, dsummersl@gmail.com)";
@@ -87,34 +86,20 @@ function expandWeather(values, hours) {
   return out;
 }
 
-function jday(date) {
-  const y = date.getUTCFullYear();
-  const m = date.getUTCMonth() + 1;
-  const d = date.getUTCDate();
-  const n = Math.floor(367 * y - 7 * (y + Math.floor((m + 9) / 12)) / 4 + 275 * m / 9 + d - 730531.5);
-  return n;
-}
-
-function solarEvent(date, lat, lon, rising) {
-  const n = jday(date) + 0.0008;
-  const jStar = n - lon / 360;
-  const M = (357.5291 + 0.98560028 * jStar) % 360;
-  const Mr = M * Math.PI / 180;
-  const C = 1.9148 * Math.sin(Mr) + 0.02 * Math.sin(2 * Mr) + 0.0003 * Math.sin(3 * Mr);
-  const lam = (M + C + 180 + 102.9372) % 360;
-  const lamr = lam * Math.PI / 180;
-  const jTransit = 2451545 + jStar + 0.0053 * Math.sin(Mr) - 0.0069 * Math.sin(lamr);
-  const decl = Math.asin(Math.sin(lamr) * Math.sin(23.4397 * Math.PI / 180));
-  const cosOmega = (Math.sin(-0.833 * Math.PI / 180) - Math.sin(lat * Math.PI / 180) * Math.sin(decl)) / (Math.cos(lat * Math.PI / 180) * Math.cos(decl));
-  if (cosOmega < -1 || cosOmega > 1) return null;
-  const omega = Math.acos(cosOmega) * 180 / Math.PI;
-  const jEvent = jTransit + (rising ? -omega : omega) / 360;
-  const ms = (jEvent - 2451545) * 86400000 + new Date(Date.UTC(2000, 0, 1, 12)).getTime();
-  return new Date(ms);
+export function moonPhaseName(angle) {
+  const a = ((angle % 360) + 360) % 360;
+  if (a < 22.5) return "New Moon";
+  if (a < 67.5) return "Waxing Crescent";
+  if (a < 112.5) return "First Quarter";
+  if (a < 157.5) return "Waxing Gibbous";
+  if (a < 202.5) return "Full Moon";
+  if (a < 247.5) return "Waning Gibbous";
+  if (a < 292.5) return "Last Quarter";
+  if (a < 337.5) return "Waning Crescent";
+  return "New Moon";
 }
 
 export async function fetchLocationGrid(lat, lon) {
-  // NWS API requires coordinates with reasonable precision
   const slat = Number(lat).toFixed(4);
   const slon = Number(lon).toFixed(4);
   const point = await get(`${API}/points/${slat},${slon}`);
@@ -128,7 +113,6 @@ export async function fetchForecast(lat, lon, hours = 168) {
 
   const tz = point.timeZone;
   const start = new Date(grid.validTimes.split("/")[0]);
-  // Convert to local wall-clock
   const startLocal = new Date(start.toLocaleString("en-US", {timeZone: tz}));
   startLocal.setMinutes(0, 0, 0);
 
@@ -148,6 +132,15 @@ export async function fetchForecast(lat, lon, hours = 168) {
   const hoursLocal = Array.from({length: hours}, (_, i) => new Date(startLocal.getTime() + i * 3600000));
   const hoursUTC = hoursLocal.map(d => new Date(d.toLocaleString("en-US", {timeZone: "UTC"})));
 
+  const fmtLocal = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${y}-${m}-${dd}T${hh}:${mm}`;
+  };
+
   const series = {};
   for (const name of elements) {
     if (grid[name]) series[name] = expand(grid[name], hoursUTC, units[name]);
@@ -157,18 +150,32 @@ export async function fetchForecast(lat, lon, hours = 168) {
   const weather = expandWeather(weatherGrid, hoursUTC);
   series.weather = weather;
 
-  // Sun times
-  const days = [...new Set(hoursLocal.map(d => d.toISOString().slice(0, 10)))].map(s => new Date(s + "T00:00:00"));
-  const sun = days.map(day => {
-    const entry = {date: day.toISOString().slice(0, 10)};
-    const sr = solarEvent(day, lat, lon, true);
-    const ss = solarEvent(day, lat, lon, false);
-    if (sr) entry.sunrise = sr.toISOString();
-    if (ss) entry.sunset = ss.toISOString();
+  const localDates = [...new Set(hoursLocal.map(fmtLocal).map(s => s.slice(0, 10)))];
+  const observer = new Observer(lat, lon, 0);
+
+  const sun = localDates.map(dateStr => {
+    const entry = {date: dateStr};
+    const startTime = MakeTime(new Date(dateStr + "T00:00:00Z"));
+    const sr = SearchRiseSet(Body.Sun, observer, +1, startTime, 2);
+    const ss = SearchRiseSet(Body.Sun, observer, -1, startTime, 2);
+    if (sr) entry.sunrise = sr.date.toISOString();
+    if (ss) entry.sunset = ss.date.toISOString();
     return entry;
   });
 
-  // Worded periods
+  const moon = localDates.map(dateStr => {
+    const time = MakeTime(new Date(dateStr + "T12:00:00Z"));
+    const illum = Illumination(Body.Moon, time);
+    const angle = MoonPhase(time);
+    const phase = ((angle % 360) + 360) % 360 / 360;
+    return {
+      date: dateStr,
+      phase,
+      illumination: illum.phase_fraction,
+      name: moonPhaseName(angle),
+    };
+  });
+
   let periods = [];
   try {
     const fc = await get(point.forecast);
@@ -179,7 +186,6 @@ export async function fetchForecast(lat, lon, hours = 168) {
     }));
   } catch (_) {}
 
-  // Active alerts
   let alerts = [];
   try {
     const alertRes = await get(`${API}/alerts/active?point=${Number(lat).toFixed(4)},${Number(lon).toFixed(4)}`);
@@ -203,9 +209,10 @@ export async function fetchForecast(lat, lon, hours = 168) {
       gridX: point.gridX, gridY: point.gridY,
       elevation_ft: grid.elevation?.value ? Math.round(grid.elevation.value * 3.28084) : null,
     },
-    hours: hoursLocal.map(d => d.toISOString().slice(0, 16)),
+    hours: hoursLocal.map(fmtLocal),
     series,
     sun,
+    moon,
     periods,
     alerts,
   };

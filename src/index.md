@@ -8,6 +8,7 @@ toc: false
 ```js
 import * as d3 from "npm:d3";
 import {fetchForecast} from "./nws-client.js";
+import {moonEmoji, buildBands} from "./bands.js";
 
 const DEFAULT_LAT = 36.01;
 const DEFAULT_LON = -79.227;
@@ -114,35 +115,7 @@ const tzLabel = new Intl.DateTimeFormat("en-US", {timeZone: loc.timeZone, timeZo
 ```
 
 ```js
-// Night bands, from the loader's sunrise/sunset table. Two purposes: they make the
-// diurnal temperature cycle legible at a glance, and they anchor "which day is this"
-// without a tick label on every hour.
-const nights = (() => {
-  const solarDays = raw.sun.map(d => ({
-    sunrise: d.sunrise ? new Date(d.sunrise) : null,
-    sunset: d.sunset ? new Date(d.sunset) : null,
-  }));
-  const out = [];
-  if (solarDays[0]?.sunrise > start) out.push({start, end: solarDays[0].sunrise});
-  for (let i = 0; i < solarDays.length - 1; i++) {
-    if (solarDays[i].sunset && solarDays[i + 1].sunrise) {
-      out.push({start: solarDays[i].sunset, end: solarDays[i + 1].sunrise});
-    }
-  }
-  return out;
-})();
-// Day bands fill the gaps between night bands, so the full timeline alternates.
-const days = (() => {
-  const out = [];
-  let prev = start;
-  const end = rows[rows.length - 1].t;
-  for (const n of nights) {
-    if (n.start > prev) out.push({start: prev, end: n.start});
-    prev = n.end;
-  }
-  if (prev < end) out.push({start: prev, end});
-  return out;
-})();
+const bands = buildBands(raw.hours, raw.sun, raw.moon, loc.timeZone);
 ```
 
 ```js
@@ -227,8 +200,8 @@ const MARGIN = {left: 46, right: 82, top: 16, bottom: 24};
 currentTime;
 function frame(yDomain, {showXAxis = false} = {}) {
   return [
-    Plot.rect(days, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-day)", fillOpacity: 0.06}),
-    Plot.rect(nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: 0.1}),
+    Plot.rect(bands.days, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-day)", fillOpacity: 0.06}),
+    Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: d => 0.13 - (d.moonIllumination ?? 0.5) * 0.07}),
     Plot.ruleX(
       d3.timeDay.range(xDomain[0], xDomain[1]),
       {stroke: FAINT, strokeWidth: 1, strokeOpacity: 0.35}
@@ -342,6 +315,16 @@ const tempPanel = panel({
     Plot.line(data, {x: "t", y: "temperature", stroke: C.temp, strokeWidth: 2, curve: "monotone-x"}),
     endLabels(tempSeries, tempDomain, PANEL_HEIGHT),
     chartLabel("Temperature"),
+    Plot.text(bands.nights.filter(d => d.moonPhase != null), {
+      x: d => new Date((d.start.getTime() + d.end.getTime()) / 2),
+      y: tempDomain[1],
+      text: d => moonEmoji(d.moonPhase),
+      fontSize: 14,
+      dy: -10,
+      fill: "var(--theme-foreground)",
+      fillOpacity: d => 0.15 + (d.moonIllumination ?? 0) * 0.6,
+      textAnchor: "middle",
+    }),
     Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
     Plot.text([currentTime], {
       x: d => d, y: tempDomain[1], dy: 6,
@@ -583,7 +566,7 @@ const alertCallout = !alertEntries?.length ? null : html`<div style="margin-bott
 ```
 
 <div class="card chart-container" style="padding:0;border:none;background:none;border-radius:0;box-shadow:none;">
-  ${alertCallout}
+  ${alertCallout || ""}
   ${resize(tempPanel)}
   ${resize(skyPrecipRhPanel)}
   ${resize(windPanel)}
@@ -652,7 +635,7 @@ const covLabel = (lvl) => lvl ? COVERAGE_LABELS[lvl] : "-";
 
 - National Digital Forecast Database grid that [forecast.weather.gov's graphical forecast](https://forecast.weather.gov/MapClick.php?w0=t&w2=wc&w3=sfcwind&w3u=1&w4=sky&w13u=0&w14u=1&w15u=1&AheadHour=0&Submit=Submit&FcstType=graphical&textField1=${loc.lat}&textField2=${loc.lon}&site=all&unit=0&dd=&bw=)
 - Grid cell: ${html`<a href="https://api.weather.gov/gridpoints/${loc.office}/${loc.gridX},${loc.gridY}"><code>/gridpoints/${loc.office}/${loc.gridX},${loc.gridY}</code></a>`} — issued by NWS ${loc.office}.
-- Sunrise/sunset are computed locally (NOAA low-precision almanac) for the night bands; the API does not supply them.
+- Sunrise/sunset and moon phase are computed locally (astronomy-engine); the API does not supply them.
 
 <style>
 .big { font-size: 2rem; font-weight: 600; line-height: 1.2; display: block; }
