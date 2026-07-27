@@ -321,10 +321,14 @@ const tempPanel = panel({
   marks: () => {
     const moonBands = bands.nights.filter(d => {
       if (d.moonPhase == null) return false;
-      const hours = (d.end.getTime() - d.start.getTime()) / 3600000;
-      if (hours < 3) return false;
+      const totalHours = (d.end.getTime() - d.start.getTime()) / 3600000;
+      if (totalHours < 3) return false;
       const mid = (d.start.getTime() + d.end.getTime()) / 2;
       if (mid <= xDomain[0].getTime() || mid >= xDomain[1].getTime()) return false;
+      const visStart = Math.max(d.start.getTime(), xDomain[0].getTime());
+      const visEnd = Math.min(d.end.getTime(), xDomain[1].getTime());
+      const visibleHours = (visEnd - visStart) / 3600000;
+      if (visibleHours < 4) return false;
       return true;
     });
     const moonInfoMap = new Map();
@@ -337,9 +341,12 @@ const tempPanel = panel({
     }
     let moonMarks = [];
     if (moonBands.length) {
-      const midpoints = moonBands.map(d => ({
-        ...d,
-        x: new Date((d.start.getTime() + d.end.getTime()) / 2),
+      const midpoints = moonBands.map(d => {
+        const visStart = Math.max(d.start.getTime(), xDomain[0].getTime());
+        const visEnd = Math.min(d.end.getTime(), xDomain[1].getTime());
+        return {
+          ...d,
+          x: new Date((visStart + visEnd) / 2),
         src: moonSVGDataURL(d.moonPhase, 24, 0.3 + (d.moonIllumination ?? 0) * 0.65),
       }));
       moonMarks = [
