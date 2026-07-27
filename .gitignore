@@ -9,3 +9,7 @@ yarn-error.log
 # Python loader intermediates / caches
 __pycache__/
 .venv/
+
+# Video demo
+video-demo/*.mp4
+video-demo/*.webm
