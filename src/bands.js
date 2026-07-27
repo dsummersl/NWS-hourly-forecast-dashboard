@@ -1,3 +1,5 @@
+import {moonPhaseName} from "./moonsvg.js";
+
 export function moonEmoji(phase) {
   if (phase == null) return "";
   if (phase < 0.0625 || phase >= 0.9375) return "\u{1F311}";
@@ -76,6 +78,7 @@ export function buildBands(hours, sun, moon, tz) {
       if (moonData) {
         band.moonPhase = moonData.phase;
         band.moonIllumination = moonData.illumination;
+        band.moonName = moonPhaseName(moonData.phase * 360);
       }
       nights.push(band);
     } else {

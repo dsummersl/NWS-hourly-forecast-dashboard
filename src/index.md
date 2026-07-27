@@ -8,7 +8,8 @@ toc: false
 ```js
 import * as d3 from "npm:d3";
 import {fetchForecast} from "./nws-client.js";
-import {moonEmoji, buildBands} from "./bands.js";
+import {buildBands} from "./bands.js";
+import {moonSVGDataURL} from "./moonsvg.js";
 
 const DEFAULT_LAT = 36.01;
 const DEFAULT_LON = -79.227;
@@ -201,7 +202,7 @@ currentTime;
 function frame(yDomain, {showXAxis = false} = {}) {
   return [
     Plot.rect(bands.days, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-day)", fillOpacity: 0.06}),
-    Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: d => 0.13 - (d.moonIllumination ?? 0.5) * 0.07}),
+    Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: d => 0.16 - (d.moonIllumination ?? 0.5) * 0.14}),
     Plot.ruleX(
       d3.timeDay.range(xDomain[0], xDomain[1]),
       {stroke: FAINT, strokeWidth: 1, strokeOpacity: 0.35}
@@ -309,38 +310,56 @@ const tempPanel = panel({
   yDomain: tempDomain,
   yLabel: "°F",
   showXAxis: true,
-  marks: () => [
-    Plot.line(data, {x: "t", y: "dewpoint", stroke: C.dew, strokeWidth: 2, curve: "monotone-x"}),
-    Plot.line(data, {x: "t", y: "apparent", stroke: C.feels, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
-    Plot.line(data, {x: "t", y: "temperature", stroke: C.temp, strokeWidth: 2, curve: "monotone-x"}),
-    endLabels(tempSeries, tempDomain, PANEL_HEIGHT),
-    chartLabel("Temperature"),
-    Plot.text(bands.nights.filter(d => d.moonPhase != null), {
-      x: d => new Date((d.start.getTime() + d.end.getTime()) / 2),
-      y: tempDomain[1],
-      text: d => moonEmoji(d.moonPhase),
-      fontSize: 14,
-      dy: -10,
-      fill: "var(--theme-foreground)",
-      fillOpacity: d => 0.15 + (d.moonIllumination ?? 0) * 0.6,
-      textAnchor: "middle",
-    }),
-    Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
-    Plot.text([currentTime], {
-      x: d => d, y: tempDomain[1], dy: 6,
-      text: d => { const h = d.getHours(), m = d.getMinutes(); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`; },
-      rotate: -90, fontSize: 10,
-      fill: MUTED, fontWeight: 600,
-      stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
-    }),
-    ...hoverPips(tempSeries),
-    ...crosshair("temperature", (d) => [
-      `Temp  ${fmt(d.temperature, "°F")}`,
-      `Feels like  ${fmt(S.apparentTemperature?.[d.i], "°F")}`,
-      `Dew point  ${fmt(d.dewpoint, "°F")}`,
-      `Humidity  ${fmt(d.humidity, "%")}`,
-    ]),
-  ],
+  marks: () => {
+    const moonBands = bands.nights.filter(d => {
+      if (d.moonPhase == null) return false;
+      const hours = (d.end.getTime() - d.start.getTime()) / 3600000;
+      return hours >= 3;
+    });
+    let moonMarks = [];
+    if (moonBands.length) {
+      const midpoints = moonBands.map(d => ({
+        ...d,
+        x: new Date((d.start.getTime() + d.end.getTime()) / 2),
+        src: moonSVGDataURL(d.moonPhase, 20, 0.25 + (d.moonIllumination ?? 0) * 0.7),
+        title: `${d.moonName}\n${(d.moonIllumination * 100).toFixed(0)}% illuminated`,
+      }));
+      moonMarks = [
+        Plot.image(midpoints, {
+          x: "x",
+          y: tempDomain[1],
+          src: d => d.src,
+          width: 20,
+          height: 20,
+          dy: -14,
+          title: d => d.title,
+        }),
+      ];
+    }
+    return [
+      Plot.line(data, {x: "t", y: "dewpoint", stroke: C.dew, strokeWidth: 2, curve: "monotone-x"}),
+      Plot.line(data, {x: "t", y: "apparent", stroke: C.feels, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
+      Plot.line(data, {x: "t", y: "temperature", stroke: C.temp, strokeWidth: 2, curve: "monotone-x"}),
+      endLabels(tempSeries, tempDomain, PANEL_HEIGHT),
+      chartLabel("Temperature"),
+      ...moonMarks,
+      Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
+      Plot.text([currentTime], {
+        x: d => d, y: tempDomain[1], dy: 6,
+        text: d => { const h = d.getHours(), m = d.getMinutes(); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`; },
+        rotate: -90, fontSize: 10,
+        fill: MUTED, fontWeight: 600,
+        stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
+      }),
+      ...hoverPips(tempSeries),
+      ...crosshair("temperature", (d) => [
+        `Temp  ${fmt(d.temperature, "°F")}`,
+        `Feels like  ${fmt(S.apparentTemperature?.[d.i], "°F")}`,
+        `Dew point  ${fmt(d.dewpoint, "°F")}`,
+        `Humidity  ${fmt(d.humidity, "%")}`,
+      ]),
+    ];
+  },
 });
 ```
 

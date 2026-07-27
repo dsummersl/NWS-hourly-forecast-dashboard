@@ -167,6 +167,7 @@ describe("buildBands", () => {
     const night1 = nights[0];
     expect(night1.moonPhase).toBe(0.42);
     expect(night1.moonIllumination).toBe(0.94);
+    expect(night1.moonName).toBe("Waxing Gibbous");
   });
 
   it("attaches moon data to night bands", () => {
