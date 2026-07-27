@@ -24,13 +24,17 @@ export function moonSVGDataURL(phase, size = 20, opacity = 1) {
   } else if (Math.abs(phase - 0.5) < 0.002) {
     body = `<circle cx="0" cy="0" r="${R}" fill="#ffffff" fill-opacity="${opacity}"/>`;
   } else if (phase < 0.5) {
-    // Waxing: right side lit. Terminator bows right for crescent, left for gibbous.
-    const sweep = cosT > 0 ? 1 : 0;
-    body = `<path d="M 0,${-R} A ${R},${R} 0 0,1 0,${R} A ${rx},${R} 0 0,${sweep} 0,${-R} Z" fill="#ffffff" fill-opacity="${opacity}"/>`;
+    // Waxing: right side lit
+    // Crescent (phase < 0.25): terminator opposite sweep (0)
+    // Gibbous (phase >= 0.25): terminator same sweep (1)
+    const termSweep = phase < 0.25 ? 0 : 1;
+    body = `<path d="M 0,${-R} A ${R},${R} 0 0,1 0,${R} A ${rx},${R} 0 0,${termSweep} 0,${-R} Z" fill="#ffffff" fill-opacity="${opacity}"/>`;
   } else {
-    // Waning: left side lit. Terminator bows left for crescent, right for gibbous.
-    const sweep = cosT > 0 ? 0 : 1;
-    body = `<path d="M 0,${-R} A ${R},${R} 0 0,0 0,${R} A ${rx},${R} 0 0,${sweep} 0,${-R} Z" fill="#ffffff" fill-opacity="${opacity}"/>`;
+    // Waning: left side lit
+    // Gibbous (phase < 0.75): terminator same sweep (0)
+    // Crescent (phase >= 0.75): terminator opposite sweep (1)
+    const termSweep = phase < 0.75 ? 0 : 1;
+    body = `<path d="M 0,${-R} A ${R},${R} 0 0,0 0,${R} A ${rx},${R} 0 0,${termSweep} 0,${-R} Z" fill="#ffffff" fill-opacity="${opacity}"/>`;
   }
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-${size / 2} -${size / 2} ${size} ${size}" width="${size}" height="${size}">${body}</svg>`;
