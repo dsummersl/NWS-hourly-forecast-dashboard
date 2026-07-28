@@ -6,16 +6,15 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("manifest.json validation", () => {
-  it("contains valid PWA shortcuts and widgets definitions", () => {
+  it("is a valid PWA manifest", () => {
     const raw = readFileSync(join(__dirname, "..", "src", "manifest.json"), "utf-8");
     const manifest = JSON.parse(raw);
 
-    expect(manifest.shortcuts).toBeDefined();
-    expect(manifest.shortcuts.length).toBeGreaterThan(0);
-    expect(manifest.shortcuts[0].url).toContain("./widget");
-
-    expect(manifest.widgets).toBeDefined();
-    expect(manifest.widgets.length).toBeGreaterThan(0);
-    expect(manifest.widgets[0].src).toContain("./widget");
+    expect(manifest.name).toBeDefined();
+    expect(manifest.short_name).toBeDefined();
+    expect(manifest.start_url).toBeDefined();
+    expect(manifest.display).toBe("standalone");
+    expect(manifest.icons).toBeDefined();
+    expect(manifest.icons.length).toBeGreaterThan(0);
   });
 });

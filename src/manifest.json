@@ -13,41 +13,5 @@
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
-  ],
-  "shortcuts": [
-    {
-      "name": "24-Hour Forecast Widget",
-      "short_name": "Widget",
-      "description": "View next 24 hours temperature widget",
-      "url": "./widget",
-      "icons": [
-        {
-          "src": "./icon.svg",
-          "sizes": "192x192",
-          "type": "image/svg+xml"
-        }
-      ]
-    }
-  ],
-  "widgets": [
-    {
-      "name": "24h Temperature Widget",
-      "short_name": "Temp Widget",
-      "description": "Shows upcoming 24-hour temperature forecast",
-      "tag": "temp-widget",
-      "ms_ac_template": "./widget",
-      "data": "./widget",
-      "type": "text/html",
-      "src": "./widget",
-      "sizes": "300x200",
-      "screenshots": [
-        {
-          "src": "./widget-preview.png",
-          "sizes": "1280x800",
-          "type": "image/png",
-          "label": "24-Hour Temperature Widget"
-        }
-      ]
-    }
   ]
 }
