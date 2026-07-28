@@ -41,7 +41,7 @@ export function moonSVGDataURL(phase, size = 20, opacity = 1, fill = "#ffffff") 
     shadow = `<path d="${d}" ${shade} />`;
   }
 
-  const defs = `<defs><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.25"/></linearGradient></defs>`;
+  const defs = `<defs><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop offset="50%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.25"/></linearGradient></defs>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-${size / 2} -${size / 2} ${size} ${size}" width="${size}" height="${size}">${defs}${body}${shadow}</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
