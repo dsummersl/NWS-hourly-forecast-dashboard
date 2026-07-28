@@ -87,9 +87,9 @@ async function generateManifest(url) {
         sizes: '300x200',
         screenshots: [
           {
-            src: './icon.svg',
-            sizes: '512x512',
-            type: 'image/svg+xml',
+            src: './widget-preview.png',
+            sizes: '1280x800',
+            type: 'image/png',
             label: '24-Hour Temperature Widget',
           },
         ],

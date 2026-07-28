@@ -54,17 +54,13 @@ window.__runtimeData = runtimeData;
 const raw = runtimeData ?? initialData;
 
 // Location picker UI
-const picker = html`<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap;">
-  <input type="text" id="loc-input" placeholder="City, ZIP, or lat,lon…" style="flex:1;min-width:180px;padding:6px 10px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);font-size:14px;">
+const picker = html`<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem;">
+  <input type="text" id="loc-input" placeholder="City, ZIP, or lat,lon…" style="flex:1;padding:6px 10px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);font-size:14px;">
   <button id="loc-go" style="padding:6px 14px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);cursor:pointer;font-size:14px;">Go</button>
-  <a id="widget-link" href="./widget?lat=${initialLat}&lon=${initialLon}" target="_blank" style="padding:6px 12px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:4px;">
-    Widget View ↗
-  </a>
 </div>`;
 
 const locEl = picker.querySelector("#loc-input");
 const goEl = picker.querySelector("#loc-go");
-const widgetLink = picker.querySelector("#widget-link");
 
 async function updateLocation(lat, lon) {
   try {
@@ -74,9 +70,6 @@ async function updateLocation(lat, lon) {
     p.set("lat", Number(lat).toFixed(4));
     p.set("lon", Number(lon).toFixed(4));
     history.replaceState(null, "", `?${p}`);
-    if (widgetLink) {
-      widgetLink.href = `./widget?lat=${Number(lat).toFixed(4)}&lon=${Number(lon).toFixed(4)}`;
-    }
     updateManifestLink(data.location);
   } catch (e) {
     console.error("Failed to fetch forecast:", e);
