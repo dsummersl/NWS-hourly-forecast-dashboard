@@ -41,6 +41,7 @@ async function generateManifest(url) {
   const name = city && state ? `${city} NWS` : 'NWS Hourly Forecast';
   const shortName = city && state ? `${city} NWS` : 'Hourly Fcst';
   const startUrl = lat && lon ? `./?lat=${parseFloat(lat).toFixed(4)}&lon=${parseFloat(lon).toFixed(4)}` : '.';
+  const widgetUrl = lat && lon ? `./widget?lat=${parseFloat(lat).toFixed(4)}&lon=${parseFloat(lon).toFixed(4)}` : './widget';
 
   const manifest = {
     name,
@@ -56,6 +57,42 @@ async function generateManifest(url) {
         sizes: 'any',
         type: 'image/svg+xml',
         purpose: 'any maskable',
+      },
+    ],
+    shortcuts: [
+      {
+        name: '24-Hour Forecast Widget',
+        short_name: 'Widget',
+        description: 'View next 24 hours temperature widget',
+        url: widgetUrl,
+        icons: [
+          {
+            src: './icon.svg',
+            sizes: '192x192',
+            type: 'image/svg+xml',
+          },
+        ],
+      },
+    ],
+    widgets: [
+      {
+        name: '24h Temperature Widget',
+        short_name: 'Temp Widget',
+        description: 'Shows upcoming 24-hour temperature forecast',
+        tag: 'temp-widget',
+        ms_ac_template: './widget',
+        data: './widget',
+        type: 'text/html',
+        src: widgetUrl,
+        sizes: '300x200',
+        screenshots: [
+          {
+            src: './icon.svg',
+            sizes: '512x512',
+            type: 'image/svg+xml',
+            label: '24-Hour Temperature Widget',
+          },
+        ],
       },
     ],
   };
