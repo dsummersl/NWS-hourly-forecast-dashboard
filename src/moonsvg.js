@@ -20,28 +20,28 @@ export function moonSVGDataURL(phase, size = 20, opacity = 1, fill = "#ffffff") 
 
   const lit = `fill="${fill}" fill-opacity="${opacity}"`;
   const stroke = `stroke="${fill}" stroke-width="1.5"`;
-  const grad = `fill="url(#g)" opacity="${opacity}"`;
+  const shade = `fill="url(#s)" opacity="${opacity}"`;
 
-  let body, glow;
+  let body, shadow;
   if (phase < 0.002 || phase > 0.998) {
     body = `<circle cx="0" cy="0" r="${R}" fill="none" ${stroke} opacity="${opacity * 0.4}"/>`;
-    glow = "";
+    shadow = "";
   } else if (Math.abs(phase - 0.5) < 0.002) {
     body = `<circle cx="0" cy="0" r="${R}" ${lit} />`;
-    glow = `<circle cx="0" cy="0" r="${R}" ${grad} />`;
+    shadow = `<circle cx="0" cy="0" r="${R}" ${shade} />`;
   } else if (phase < 0.5) {
     const termSweep = phase < 0.25 ? 0 : 1;
     const d = `M 0,${-R} A ${R},${R} 0 0,1 0,${R} A ${rx},${R} 0 0,${termSweep} 0,${-R} Z`;
     body = `<path d="${d}" ${lit} />`;
-    glow = `<path d="${d}" ${grad} />`;
+    shadow = `<path d="${d}" ${shade} />`;
   } else {
     const termSweep = phase < 0.75 ? 0 : 1;
     const d = `M 0,${-R} A ${R},${R} 0 0,0 0,${R} A ${rx},${R} 0 0,${termSweep} 0,${-R} Z`;
     body = `<path d="${d}" ${lit} />`;
-    glow = `<path d="${d}" ${grad} />`;
+    shadow = `<path d="${d}" ${shade} />`;
   }
 
-  const defs = `<defs><radialGradient id="g" cx="35%" cy="35%" r="60%"><stop offset="0%" stop-color="#ffe0a0" stop-opacity="0.3"/><stop offset="100%" stop-color="#ffe0a0" stop-opacity="0"/></radialGradient></defs>`;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-${size / 2} -${size / 2} ${size} ${size}" width="${size}" height="${size}">${defs}${body}${glow}</svg>`;
+  const defs = `<defs><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.25"/></linearGradient></defs>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-${size / 2} -${size / 2} ${size} ${size}" width="${size}" height="${size}">${defs}${body}${shadow}</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
