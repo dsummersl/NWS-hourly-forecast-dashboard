@@ -744,8 +744,8 @@ details summary { user-select:none; }
     --series-feels: #199e70;
     --series-wind:  #3987e5;
     --series-gust:  #d55181;
-    --band-night: #1a2a4a;
-    --band-day:   #2a2820;
+    --band-night: #141e3e;
+    --band-day:   #c9a030;
     --weather-rain:   #3987e5;
     --weather-thunder:#a78bfa;
     --weather-fog:   #6b7280;
@@ -761,8 +761,8 @@ details summary { user-select:none; }
   --series-feels: #199e70;
   --series-wind:  #3987e5;
   --series-gust:  #d55181;
-  --band-night: #1a2a4a;
-  --band-day:   #2a2820;
+  --band-night: #141e3e;
+  --band-day:   #c9a030;
   --weather-rain:   #3987e5;
   --weather-thunder:#a78bfa;
   --weather-fog:   #6b7280;
