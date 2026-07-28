@@ -666,6 +666,22 @@ window.__hoveredIdx = hoveredIdx;
     const leave = () => { window.__hoveredIdx.value = null; };
     el.addEventListener("pointermove", handler);
     el.addEventListener("pointerleave", leave);
+    // Ensure only one Chart tooltip is visible at a time. On tap/click, Plot's
+    // pointerX toggles a "sticky" mode — without cleanup, multiple panels can
+    // accumulate sticky tooltips, which is especially bad on mobile.
+    el.addEventListener("pointerdown", (e) => {
+      const targetSvg = e.target.closest("svg") || e.target.ownerSVGElement;
+      if (!targetSvg) return;
+      // Defer so Plot's pointerdown handler (sticky toggle + render) runs first.
+      setTimeout(() => {
+        const svgs = el.querySelectorAll("svg");
+        for (const svg of svgs) {
+          if (svg === targetSvg) continue;
+          const tip = svg.querySelector('g[aria-label="tip"]');
+          if (tip) tip.replaceChildren();
+        }
+      }, 0);
+    }, true);
   }
 }
 ```
