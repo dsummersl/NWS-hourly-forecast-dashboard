@@ -686,37 +686,6 @@ window.__hoveredIdx = hoveredIdx;
 }
 ```
 
-```js
-const hi = hoveredIdx;
-const h = hi != null ? rows[hi] : now;
-const feelsLike = S.heatIndex?.[h.i] ?? S.apparentTemperature?.[h.i];
-const rainLevel = S.weather?.rain?.[h.i];
-const thunderLevel = S.weather?.thunder?.[h.i];
-const covLabel = (lvl) => lvl ? COVERAGE_LABELS[lvl] : "-";
-```
-
-## ${h.t.toLocaleString("en-US", {weekday: "long", month: "long", day: "numeric", hour: "numeric"})}
-
-<div class="grid grid-cols-4">
-  <div class="grid">
-    Temperature: ${fmt(h.temperature, "°F")}<br>
-    Dewpoint: ${fmt(h.dewpoint, "°F")}
-  </div>
-  <div class="grid">
-    Heat Index: ${fmt(feelsLike, "°F")}<br>
-    Surface Wind: ${compass(h.windDirection)} ${fmt(h.windSpeed, "mph")}
-  </div>
-  <div class="grid">
-    Sky Cover: ${fmt(h.skyCover, "%")}<br>
-    Precip Potential: ${fmt(h.precipChance, "%")}
-  </div>
-  <div class="grid">
-    Humidity: ${fmt(h.humidity, "%")}<br>
-    Rain: ${covLabel(rainLevel)}<br>
-    Thunder: ${covLabel(thunderLevel)}
-  </div>
-</div>
-
 ## Sources
 
 - National Digital Forecast Database grid that [forecast.weather.gov's graphical forecast](https://forecast.weather.gov/MapClick.php?w0=t&w2=wc&w3=sfcwind&w3u=1&w4=sky&w13u=0&w14u=1&w15u=1&AheadHour=0&Submit=Submit&FcstType=graphical&textField1=${loc.lat}&textField2=${loc.lon}&site=all&unit=0&dd=&bw=)
