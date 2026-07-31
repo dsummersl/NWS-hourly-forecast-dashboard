@@ -10,6 +10,7 @@ import * as d3 from "npm:d3";
 import {fetchForecast} from "./nws-client.js";
 import {buildBands} from "./bands.js";
 import {moonSVGDataURL} from "./moonsvg.js";
+import {generateTestData} from "./test-data.js";
 
 const DEFAULT_LAT = 36.01;
 const DEFAULT_LON = -79.227;
@@ -18,6 +19,7 @@ const urlParams = new URLSearchParams(location.search);
 const initialLat = parseFloat(urlParams.get("lat")) || DEFAULT_LAT;
 const initialLon = parseFloat(urlParams.get("lon")) || DEFAULT_LON;
 const initialHours = parseInt(urlParams.get("hours")) || 48;
+const testMode = urlParams.has("test");
 ```
 
 ```js
@@ -39,7 +41,7 @@ const themeTick = Mutable(0);
 
 ```js
 // Initial data is a Promise; the framework auto-awaits it for other cells.
-const initialData = fetchForecast(initialLat, initialLon);
+const initialData = testMode ? generateTestData(initialLat, initialLon, initialHours) : fetchForecast(initialLat, initialLon);
 ```
 
 ```js
@@ -64,11 +66,12 @@ const goEl = picker.querySelector("#loc-go");
 
 async function updateLocation(lat, lon) {
   try {
-    const data = await fetchForecast(lat, lon);
+    const data = testMode ? generateTestData(lat, lon) : await fetchForecast(lat, lon);
     if (window.__runtimeData) window.__runtimeData.value = data;
     const p = new URLSearchParams(location.search);
     p.set("lat", Number(lat).toFixed(4));
     p.set("lon", Number(lon).toFixed(4));
+    if (testMode) p.set("test", "1");
     history.replaceState(null, "", `?${p}`);
     updateManifestLink(data.location);
   } catch (e) {
@@ -629,29 +632,27 @@ const wxPanel = panel({
   showXAxis: true,
   marks: () => [
     chartLabel("Rain, Thunder & Fog"),
-    Plot.rectY(fogData, fogged({
-      x: "t", y1: 0, y2: "level", fill: "var(--weather-fog)", fillOpacity: 0.32,
-      interval: d3.timeHour.every(step), insetLeft: -1, insetRight: -1,
-    })),
-    Plot.rect(qpfGroups, {
-      x1: "start", x2: "end", y1: 0, y2: 1.5,
-      fill: "var(--weather-rain)", fillOpacity: 0.3,
-      stroke: "var(--weather-rain)", strokeWidth: 0.5, strokeOpacity: 0.4,
-    }),
-    Plot.text(qpfGroups, {
-      x: (d) => new Date((d.start.getTime() + d.end.getTime()) / 2),
-      y: 0.75, text: (d) => `${d.value.toFixed(2)}"`,
-      fontSize: 11, fill: "var(--qpf-text)", fontWeight: 700, textAnchor: "middle",
-    }),
     Plot.rectY(rainData, {
       x: "t", y1: 0, y2: "level", fill: "var(--weather-rain)",
       interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2, fillOpacity: 0.5,
     }),
+    Plot.rectY(fogData, fogged({
+      x: "t", y1: 0, y2: "level", fill: "var(--weather-fog)", fillOpacity: 0.65,
+      interval: d3.timeHour.every(step), insetLeft: -1, insetRight: -1,
+    })),
     Plot.rectY(thunderData, boltHatched({
       x: "t", y1: 0, y2: "level",
       interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2,
-      stroke: "var(--weather-thunder)", strokeWidth: 1, strokeOpacity: 0.6,
     }, "var(--weather-thunder)")),
+    Plot.rect(qpfGroups, {
+      x1: "start", x2: "end", y1: 0.25, y2: 0.75,
+      fill: "var(--qpf-bar)", fillOpacity: 1,
+    }),
+    Plot.text(qpfGroups, {
+      x: (d) => new Date((d.start.getTime() + d.end.getTime()) / 2),
+      y: 0.5, text: (d) => `${d.value.toFixed(2)}"`,
+      fontSize: 10, fill: "var(--qpf-text)", fontWeight: 700, textAnchor: "middle",
+    }),
     Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
     Plot.text([currentTime], {
       x: d => d, y: 4.5, dy: 6,
@@ -789,7 +790,9 @@ window.__hoveredIdx = hoveredIdx;
   --series-humid:   #22c55e;
   --weather-rain:   #2a78d6;
   --weather-thunder:#e0a400;
-  --weather-fog:   #9ca3af;
+  --weather-fog:   #ffffff;
+  --fog-opacity: 0.95;
+  --qpf-bar: #7b93b0;
   --qpf-text: #1a1a2e;
   --alert-extreme: #dc2626;
   --alert-severe: #ea580c;
@@ -812,9 +815,11 @@ details summary { user-select:none; }
     --band-day-wash: rgba(224, 184, 72, 0.10);
     --weather-rain:   #3987e5;
     --weather-thunder:#ffd54a;
-    --weather-fog:   #94a3b8;
+    --weather-fog:   #d6dce5;
+    --fog-opacity: 0.5;
     --series-sky:   #6b7280;
     --series-humid:   #16a34a;
+    --qpf-bar: #8b9db5;
     --qpf-text: #fff;
     --moon-fill: #f0e6c0;
   }
@@ -831,6 +836,7 @@ details summary { user-select:none; }
   --weather-rain:   #3987e5;
   --weather-thunder:#ffd54a;
   --weather-fog:   #94a3b8;
+  --fog-opacity: 0.5;
   --series-sky:   #6b7280;
   --series-humid:   #16a34a;
   --qpf-text: #fff;

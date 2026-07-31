@@ -13,6 +13,7 @@ import * as Plot from "npm:@observablehq/plot";
 import {fetchForecast} from "./nws-client.js";
 import {buildBands} from "./bands.js";
 import {computeWidgetWindow, filterWidgetData, getCurrentTempSummary, buildWidgetPlotSpec} from "./widget-temp.js";
+import {generateTestData} from "./test-data.js";
 
 const DEFAULT_LAT = 36.01;
 const DEFAULT_LON = -79.227;
@@ -21,10 +22,11 @@ const urlParams = new URLSearchParams(location.search);
 const lat = parseFloat(urlParams.get("lat")) || DEFAULT_LAT;
 const lon = parseFloat(urlParams.get("lon")) || DEFAULT_LON;
 const pastHours = parseInt(urlParams.get("past")) || 2;
+const testMode = urlParams.has("test");
 ```
 
 ```js
-const raw = await fetchForecast(lat, lon);
+const raw = testMode ? generateTestData(lat, lon) : await fetchForecast(lat, lon);
 const loc = raw.location;
 const S = raw.series;
 
