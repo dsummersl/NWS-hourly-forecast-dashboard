@@ -180,7 +180,7 @@ def expand_weather(
     index = {h: i for i, h in enumerate(hours)}
     for entry in values:
         start, duration = parse_interval(entry["validTime"])
-        cursor = start.replace(minute=0, second=0, microsecond=0)
+        interval_start = start.replace(minute=0, second=0, microsecond=0)
         end = start + duration
         conditions = entry.get("value", [])
         if not conditions or conditions[0].get("weather") is None:
@@ -192,6 +192,7 @@ def expand_weather(
                 continue
             cov = cond.get("coverage") or "none"
             level = WEATHER_COVERAGE.get(cov, 0)
+            cursor = interval_start  # reset per condition
             while cursor < end:
                 i = index.get(cursor)
                 if i is not None:

@@ -35,7 +35,7 @@ function expand(element, hours, unit) {
     if (value == null) continue;
     if (unit === "degF") value = Math.round(value * 9 / 5 + 32, 1);
     if (unit === "mph") value = Math.round(value * 0.621371, 1);
-    if (unit === "mm") value = Math.round(value / 25.4, 2);
+    if (unit === "mm") value = Math.round(value / 25.4 * 100) / 100;
     const cursor = new Date(start);
     cursor.setMinutes(0, 0, 0);
     const end = new Date(start.getTime() + duration);
