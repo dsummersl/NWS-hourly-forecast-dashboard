@@ -241,7 +241,9 @@ function frame(yDomain, {showXAxis = false, pw = 1000} = {}) {
       ? (hoursShown <= 24 ? 4 : hoursShown <= 48 ? 8 : 12)
       : (hoursShown <= 24 ? 3 : hoursShown <= 48 ? 6 : 12);
   return [
-    Plot.rect(bands.days, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-day)", fillOpacity: 0.06}),
+    // Opacity rides in the color so the day band can be tuned per theme from CSS alone
+    // — dark mode needs a brighter wash than light mode to read as daylight at all.
+    Plot.rect(bands.days, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-day-wash)", fillOpacity: 1}),
     Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: d => 0.28 - (d.moonIllumination ?? 0.5) * 0.20}),
     Plot.ruleX(
       d3.timeDay.range(xDomain[0], xDomain[1]),
@@ -529,54 +531,112 @@ const qpfGroups = (() => {
 })();
 
 const COVERAGE_LABELS = ["", "Slight Chance", "Chance", "Likely", "Occasional"];
+const COVERAGE_TICKS = {1: "SCHC", 2: "CHC", 3: "LKLY", 4: "OCNL"};
 
-function weatherPanel(data, label, color) {
-  return panel({
-    yDomain: [0, 4.5],
-    yLabel: null,
-    yTicks: [1, 2, 3, 4],
-    yTickFormat: (d) => ({1: "SCHC", 2: "CHC", 3: "LKLY", 4: "OCNL"})[d] ?? "",
-    height: 150,
-    showXAxis: true,
-    marks: () => [
-      chartLabel(label),
-      Plot.rectY(data, {
-        x: "t", y1: 0, y2: "level", fill: color,
-        interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2,
-      }),
-      Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
-      Plot.text([currentTime], {
-        x: d => d, y: 4.5, dy: 6,
-        text: () => "NOW",
-        rotate: -90, fontSize: 10,
-        fill: MUTED, fontWeight: 600,
-        stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
-      }),
-      Plot.ruleX(data, Plot.pointerX({x: "t", stroke: INK, strokeOpacity: 0.45})),
-      Plot.tip(data, Plot.pointerX({
-        x: "t", y: "level", fontSize: 12,
-        title: (d) => [
-          d.t.toLocaleString("en-US", {weekday: "short", hour: "numeric", minute: "2-digit"}),
-          `${label}: ${COVERAGE_LABELS[d.level] ?? d.level}`,
-        ].join("\n"),
-      })),
-    ],
-  });
+// Rain, thunder and fog share one axis (NWS coverage levels) and rarely overlap, so
+// they stack into a single panel. Each gets a distinct *texture* rather than a distinct
+// slot: fog is a blurred wash underneath, rain a solid bar, thunder a bolt hatch that
+// leaves most of its area transparent so whatever is beneath still reads through.
+const SVG_NS = "http://www.w3.org/2000/svg";
+let paintSeq = 0;
+
+// Plot exposes no option for SVG filters or pattern fills, so both are attached by
+// wrapping the mark's render: build the paint server, drop it in the mark's own <g>,
+// then point that <g> at it.
+function withPaint(options, makePaint, apply) {
+  return {
+    ...options,
+    render(index, scales, values, dimensions, context, next) {
+      const g = next.call(this, index, scales, values, dimensions, context);
+      if (!g) return g;
+      const id = `wx-paint-${++paintSeq}`;
+      const defs = document.createElementNS(SVG_NS, "defs");
+      defs.append(makePaint(id));
+      g.prepend(defs);
+      apply(g, id);
+      return g;
+    },
+  };
 }
 
-const rainPanel = panel({
+// Fog has no crisp extent in the real world and shouldn't have one on the chart either.
+function fogged(options, stdDeviation = 4) {
+  return withPaint(
+    options,
+    (id) => {
+      const filter = document.createElementNS(SVG_NS, "filter");
+      filter.setAttribute("id", id);
+      // Room for the blur to bleed past the rects' own bounding box.
+      filter.setAttribute("x", "-30%");
+      filter.setAttribute("y", "-30%");
+      filter.setAttribute("width", "160%");
+      filter.setAttribute("height", "160%");
+      const blur = document.createElementNS(SVG_NS, "feGaussianBlur");
+      blur.setAttribute("stdDeviation", stdDeviation);
+      filter.append(blur);
+      return filter;
+    },
+    (g, id) => g.setAttribute("filter", `url(#${id})`)
+  );
+}
+
+// A tile of angled bolts: bright enough to read as a value, sparse enough to see through.
+const BOLT_PATH = "M9.2 0 L3 8.4 L6.3 8.4 L4.3 15 L11.4 5.8 L7.8 5.8 L10.4 0 Z";
+function boltHatched(options, color) {
+  return withPaint(
+    options,
+    (id) => {
+      const pattern = document.createElementNS(SVG_NS, "pattern");
+      pattern.setAttribute("id", id);
+      pattern.setAttribute("patternUnits", "userSpaceOnUse");
+      pattern.setAttribute("width", 14);
+      pattern.setAttribute("height", 17);
+      pattern.setAttribute("patternTransform", "rotate(-14)");
+      const path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("d", BOLT_PATH);
+      path.setAttribute("fill", color);
+      path.setAttribute("fill-opacity", "0.95");
+      pattern.append(path);
+      return pattern;
+    },
+    (g, id) => {
+      g.setAttribute("fill", `url(#${id})`);
+      // Plot writes fill per-shape when it varies, so override the shapes too.
+      for (const node of g.children) {
+        if (node.tagName === "rect" || node.tagName === "path") node.setAttribute("fill", `url(#${id})`);
+      }
+    }
+  );
+}
+
+// Tooltip lookups come from the unsampled series, so a hovered hour reports its own
+// values even when the bars themselves are thinned out at wider time ranges.
+const levelAt = (key, i) => {
+  const v = S.weather?.[key]?.[i];
+  return v > 0 ? v : null;
+};
+const qpfAt = (i) => {
+  const v = S.quantitativePrecipitation?.[i];
+  return v > 0 ? v : null;
+};
+
+const wxPanel = panel({
   yDomain: [0, 4.5],
   yLabel: null,
   yTicks: [1, 2, 3, 4],
-  yTickFormat: (d) => ({1: "SCHC", 2: "CHC", 3: "LKLY", 4: "OCNL"})[d] ?? "",
-    height: 150,
-    showXAxis: true,
+  yTickFormat: (d) => COVERAGE_TICKS[d] ?? "",
+  height: 190,
+  showXAxis: true,
   marks: () => [
-    chartLabel("Rain"),
+    chartLabel("Rain, Thunder & Fog"),
+    Plot.rectY(fogData, fogged({
+      x: "t", y1: 0, y2: "level", fill: "var(--weather-fog)", fillOpacity: 0.32,
+      interval: d3.timeHour.every(step), insetLeft: -1, insetRight: -1,
+    })),
     Plot.rect(qpfGroups, {
       x1: "start", x2: "end", y1: 0, y2: 1.5,
-      fill: "#2a78d6", fillOpacity: 0.3,
-      stroke: "#2a78d6", strokeWidth: 0.5, strokeOpacity: 0.4,
+      fill: "var(--weather-rain)", fillOpacity: 0.3,
+      stroke: "var(--weather-rain)", strokeWidth: 0.5, strokeOpacity: 0.4,
     }),
     Plot.text(qpfGroups, {
       x: (d) => new Date((d.start.getTime() + d.end.getTime()) / 2),
@@ -587,6 +647,11 @@ const rainPanel = panel({
       x: "t", y1: 0, y2: "level", fill: "var(--weather-rain)",
       interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2, fillOpacity: 0.5,
     }),
+    Plot.rectY(thunderData, boltHatched({
+      x: "t", y1: 0, y2: "level",
+      interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2,
+      stroke: "var(--weather-thunder)", strokeWidth: 1, strokeOpacity: 0.6,
+    }, "var(--weather-thunder)")),
     Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
     Plot.text([currentTime], {
       x: d => d, y: 4.5, dy: 6,
@@ -596,17 +661,31 @@ const rainPanel = panel({
       stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
     }),
     Plot.ruleX(data, Plot.pointerX({x: "t", stroke: INK, strokeOpacity: 0.45})),
-    Plot.tip(rainData, Plot.pointerX({
-      x: "t", y: "level", fontSize: 12,
-      title: (d) => [
-        d.t.toLocaleString("en-US", {weekday: "short", hour: "numeric", minute: "2-digit"}),
-        `Rain: ${COVERAGE_LABELS[d.level] ?? d.level}`,
-      ].join("\n"),
+    Plot.tip(data, Plot.pointerX({
+      x: "t", y: () => 0, fontSize: 12,
+      title: (d) => {
+        const lines = [d.t.toLocaleString("en-US", {weekday: "short", hour: "numeric", minute: "2-digit"})];
+        const rain = levelAt("rain", d.i);
+        const thunder = levelAt("thunder", d.i);
+        const fog = levelAt("fog", d.i);
+        const qpf = qpfAt(d.i);
+        if (rain) lines.push(`Rain  ${COVERAGE_LABELS[rain] ?? rain}`);
+        if (qpf) lines.push(`QPF  ${qpf.toFixed(2)}"`);
+        if (thunder) lines.push(`Thunder  ${COVERAGE_LABELS[thunder] ?? thunder}`);
+        if (fog) lines.push(`Fog  ${COVERAGE_LABELS[fog] ?? fog}`);
+        if (lines.length === 1) lines.push("Clear");
+        return lines.join("\n");
+      },
     })),
   ],
 });
-const thunderPanel = weatherPanel(thunderData, "Thunder", "var(--weather-thunder)");
-const fogPanel = weatherPanel(fogData, "Fog", "var(--weather-fog)");
+
+const wxSeries = [
+  {key: "rain", label: "Rain", fill: "var(--weather-rain)"},
+  {key: "qpf", label: "QPF (in)", fill: "var(--weather-rain)"},
+  {key: "thunder", label: "Thunder", fill: "var(--weather-thunder)"},
+  {key: "fog", label: "Fog", fill: "var(--weather-fog)"},
+];
 ```
 
 ```js
@@ -640,9 +719,7 @@ const alertCallout = !alertEntries?.length ? null : html`<div style="margin-bott
   ${html`<div>${resize(tempPanel)}${legend(tempSeries)}</div>`}
   ${html`<div>${resize(skyPrecipRhPanel)}${legend(skyPrecipRhSeries)}</div>`}
   ${html`<div>${resize(windPanel)}${legend(windSeries)}</div>`}
-  ${html`<div>${resize(rainPanel)}${legend([{key:"rain",label:"Rain",fill:"var(--weather-rain)"},{key:"qpf",label:"QPF",fill:"var(--weather-rain)"}])}</div>`}
-  ${html`<div>${resize(thunderPanel)}${legend([{key:"thunder",label:"Thunder",fill:"var(--weather-thunder)"}])}</div>`}
-  ${html`<div>${resize(fogPanel)}${legend([{key:"fog",label:"Fog",fill:"var(--weather-fog)"}])}</div>`}
+  ${html`<div>${resize(wxPanel)}${legend(wxSeries)}</div>`}
 </div>
 
 ```js
@@ -707,10 +784,11 @@ window.__hoveredIdx = hoveredIdx;
   --series-gust:  #e87ba4;
   --band-night: #16162a;
   --band-day:   #ecd9a0;
+  --band-day-wash: rgba(236, 217, 160, 0.06);
   --series-sky:   #9ca3af;
   --series-humid:   #22c55e;
   --weather-rain:   #2a78d6;
-  --weather-thunder:#8b5cf6;
+  --weather-thunder:#e0a400;
   --weather-fog:   #9ca3af;
   --qpf-text: #1a1a2e;
   --alert-extreme: #dc2626;
@@ -731,9 +809,10 @@ details summary { user-select:none; }
     --series-gust:  #d55181;
     --band-night: #141e3e;
     --band-day:   #c9a030;
+    --band-day-wash: rgba(224, 184, 72, 0.10);
     --weather-rain:   #3987e5;
-    --weather-thunder:#a78bfa;
-    --weather-fog:   #6b7280;
+    --weather-thunder:#ffd54a;
+    --weather-fog:   #94a3b8;
     --series-sky:   #6b7280;
     --series-humid:   #16a34a;
     --qpf-text: #fff;
@@ -748,9 +827,10 @@ details summary { user-select:none; }
   --series-gust:  #d55181;
   --band-night: #141e3e;
   --band-day:   #c9a030;
+  --band-day-wash: rgba(224, 184, 72, 0.10);
   --weather-rain:   #3987e5;
-  --weather-thunder:#a78bfa;
-  --weather-fog:   #6b7280;
+  --weather-thunder:#ffd54a;
+  --weather-fog:   #94a3b8;
   --series-sky:   #6b7280;
   --series-humid:   #16a34a;
   --qpf-text: #fff;
