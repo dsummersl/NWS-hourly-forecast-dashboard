@@ -533,6 +533,26 @@ const qpfGroups = (() => {
   return groups;
 })();
 
+// QPF bars are labeled with a value, and NWS periods (usually 6h) packed onto a
+// narrow mobile screen leave no room to read them. Collapse contiguous periods into
+// wider windows (summing their totals) once the panel is too narrow for one-per-period.
+const MOBILE_PANEL_WIDTH = 640;
+function mergeQpfGroups(groups, maxHours) {
+  const maxMs = maxHours * 3600000;
+  const merged = [];
+  let chunk = null;
+  for (const g of groups) {
+    if (chunk && g.start.getTime() === chunk.end.getTime() && (g.end.getTime() - chunk.start.getTime()) <= maxMs) {
+      chunk = {start: chunk.start, end: g.end, value: chunk.value + g.value};
+    } else {
+      if (chunk) merged.push(chunk);
+      chunk = {start: g.start, end: g.end, value: g.value};
+    }
+  }
+  if (chunk) merged.push(chunk);
+  return merged;
+}
+
 const COVERAGE_LABELS = ["", "Slight Chance", "Chance", "Likely", "Occasional"];
 const COVERAGE_TICKS = {1: "SCHC", 2: "CHC", 3: "LKLY", 4: "OCNL"};
 
@@ -630,55 +650,58 @@ const wxPanel = panel({
   yTickFormat: (d) => COVERAGE_TICKS[d] ?? "",
   height: 190,
   showXAxis: true,
-  marks: () => [
-    chartLabel("Rain, Thunder & Fog"),
-    Plot.rectY(rainData, {
-      x: "t", y1: 0, y2: "level", fill: "var(--weather-rain)",
-      interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2, fillOpacity: 0.5,
-    }),
-    Plot.rectY(fogData, fogged({
-      x: "t", y1: 0, y2: "level", fill: "var(--weather-fog)", fillOpacity: 0.65,
-      interval: d3.timeHour.every(step), insetLeft: -1, insetRight: -1,
-    })),
-    Plot.rectY(thunderData, boltHatched({
-      x: "t", y1: 0, y2: "level",
-      interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2,
-    }, "var(--weather-thunder)")),
-    Plot.rect(qpfGroups, {
-      x1: "start", x2: "end", y1: 0.25, y2: 0.75,
-      fill: "var(--qpf-bar)", fillOpacity: 1,
-    }),
-    Plot.text(qpfGroups, {
-      x: (d) => new Date((d.start.getTime() + d.end.getTime()) / 2),
-      y: 0.5, text: (d) => `${d.value.toFixed(2)}"`,
-      fontSize: 10, fill: "var(--qpf-text)", fontWeight: 700, textAnchor: "middle",
-    }),
-    Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
-    Plot.text([currentTime], {
-      x: d => d, y: 4.5, dy: 6,
-      text: () => "NOW",
-      rotate: -90, fontSize: 10,
-      fill: MUTED, fontWeight: 600,
-      stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
-    }),
-    Plot.ruleX(data, Plot.pointerX({x: "t", stroke: INK, strokeOpacity: 0.45})),
-    Plot.tip(data, Plot.pointerX({
-      x: "t", y: () => 0, fontSize: 12,
-      title: (d) => {
-        const lines = [d.t.toLocaleString("en-US", {weekday: "short", hour: "numeric", minute: "2-digit"})];
-        const rain = levelAt("rain", d.i);
-        const thunder = levelAt("thunder", d.i);
-        const fog = levelAt("fog", d.i);
-        const qpf = qpfAt(d.i);
-        if (rain) lines.push(`Rain  ${COVERAGE_LABELS[rain] ?? rain}`);
-        if (qpf) lines.push(`QPF  ${qpf.toFixed(2)}"`);
-        if (thunder) lines.push(`Thunder  ${COVERAGE_LABELS[thunder] ?? thunder}`);
-        if (fog) lines.push(`Fog  ${COVERAGE_LABELS[fog] ?? fog}`);
-        if (lines.length === 1) lines.push("Clear");
-        return lines.join("\n");
-      },
-    })),
-  ],
+  marks: (pw) => {
+    const qpfDisplay = pw < MOBILE_PANEL_WIDTH ? mergeQpfGroups(qpfGroups, 12) : qpfGroups;
+    return [
+      chartLabel("Rain, Thunder & Fog"),
+      Plot.rectY(rainData, {
+        x: "t", y1: 0, y2: "level", fill: "var(--weather-rain)",
+        interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2, fillOpacity: 0.5,
+      }),
+      Plot.rectY(fogData, fogged({
+        x: "t", y1: 0, y2: "level", fill: "var(--weather-fog)", fillOpacity: 0.65,
+        interval: d3.timeHour.every(step), insetLeft: -1, insetRight: -1,
+      })),
+      Plot.rectY(thunderData, boltHatched({
+        x: "t", y1: 0, y2: "level",
+        interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2,
+      }, "var(--weather-thunder)")),
+      Plot.rect(qpfDisplay, {
+        x1: "start", x2: "end", y1: 0.25, y2: 0.75,
+        fill: "var(--qpf-bar)", fillOpacity: 1,
+      }),
+      Plot.text(qpfDisplay, {
+        x: (d) => new Date((d.start.getTime() + d.end.getTime()) / 2),
+        y: 0.5, text: (d) => `${d.value.toFixed(2)}"`,
+        fontSize: 10, fill: "var(--qpf-text)", fontWeight: 700, textAnchor: "middle",
+      }),
+      Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
+      Plot.text([currentTime], {
+        x: d => d, y: 4.5, dy: 6,
+        text: () => "NOW",
+        rotate: -90, fontSize: 10,
+        fill: MUTED, fontWeight: 600,
+        stroke: "var(--theme-background)", strokeWidth: 3, paintOrder: "stroke",
+      }),
+      Plot.ruleX(data, Plot.pointerX({x: "t", stroke: INK, strokeOpacity: 0.45})),
+      Plot.tip(data, Plot.pointerX({
+        x: "t", y: () => 0, fontSize: 12,
+        title: (d) => {
+          const lines = [d.t.toLocaleString("en-US", {weekday: "short", hour: "numeric", minute: "2-digit"})];
+          const rain = levelAt("rain", d.i);
+          const thunder = levelAt("thunder", d.i);
+          const fog = levelAt("fog", d.i);
+          const qpf = qpfAt(d.i);
+          if (rain) lines.push(`Rain  ${COVERAGE_LABELS[rain] ?? rain}`);
+          if (qpf) lines.push(`QPF  ${qpf.toFixed(2)}"`);
+          if (thunder) lines.push(`Thunder  ${COVERAGE_LABELS[thunder] ?? thunder}`);
+          if (fog) lines.push(`Fog  ${COVERAGE_LABELS[fog] ?? fog}`);
+          if (lines.length === 1) lines.push("Clear");
+          return lines.join("\n");
+        },
+      })),
+    ];
+  },
 });
 
 const wxSeries = [
