@@ -300,20 +300,6 @@ function hoverPips(series) {
   })));
 }
 
-// Upper-right label inside the chart frame, so each panel is self-identifying
-// without relying on external section headers or keys.
-function chartLabel(text) {
-  return Plot.text([text], {
-    frameAnchor: "top-right",
-    text: d => d,
-    fontSize: 12,
-    fontWeight: 600,
-    fill: MUTED,
-    dx: -8,
-    dy: 8,
-  });
-}
-
 function panel({yDomain, yLabel, yTicks, yTickFormat, marks, height = PANEL_HEIGHT, showXAxis = false, marginBottom = MARGIN.bottom}) {
   return (width) => Plot.plot({
     width, height, marginLeft: MARGIN.left, marginRight: MARGIN.right,
@@ -395,7 +381,6 @@ const tempPanel = panel({
       Plot.line(data, {x: "t", y: "apparent", stroke: C.feels, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
       Plot.line(data, {x: "t", y: "temperature", stroke: C.temp, strokeWidth: 2, curve: "monotone-x"}),
       ...moonMarks,
-      chartLabel("Temperature"),
       Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
       Plot.text([currentTime], {
         x: d => d, y: tempDomain[1], dy: 6,
@@ -440,7 +425,6 @@ const skyPrecipRhPanel = panel({
     Plot.line(data, {x: "t", y: "skyCover", stroke: "var(--series-sky)", strokeWidth: 1.5, curve: "monotone-x"}),
     Plot.line(data, {x: "t", y: "humidity", stroke: "var(--series-humid)", strokeWidth: 2, curve: "monotone-x"}),
     Plot.line(data, {x: "t", y: "precipChance", stroke: C.dew, strokeWidth: 2, strokeDasharray: "4 3", curve: "monotone-x"}),
-    chartLabel("Sky, Humidity & Precip"),
     Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
     Plot.text([currentTime], {
       x: d => d, y: 100, dy: 6,
@@ -485,7 +469,6 @@ const windPanel = panel({
       width: 20, height: 32,
       rotate: (d) => (d.windDirection ?? 0) - 180,
     }),
-    chartLabel("Wind"),
     Plot.ruleX([currentTime], {x: d => d, stroke: MUTED, strokeWidth: 1, strokeOpacity: 0.5}),
     Plot.text([currentTime], {
       x: d => d, y: windDomain[1], dy: 6,
@@ -653,7 +636,6 @@ const wxPanel = panel({
   marks: (pw) => {
     const qpfDisplay = pw < MOBILE_PANEL_WIDTH ? mergeQpfGroups(qpfGroups, 12) : qpfGroups;
     return [
-      chartLabel("Rain, Thunder & Fog"),
       Plot.rectY(rainData, {
         x: "t", y1: 0, y2: "level", fill: "var(--weather-rain)",
         interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2, fillOpacity: 0.5,
@@ -738,24 +720,37 @@ const alertCallout = !alertEntries?.length ? null : html`<div style="margin-bott
 </div>`;
 ```
 
-<div class="card chart-container" style="padding:0;border:none;background:none;border-radius:0;box-shadow:none;">
-  ${alertCallout || ""}
-  ${html`<div>${resize(tempPanel)}${legend(tempSeries)}</div>`}
-  ${html`<div>${resize(skyPrecipRhPanel)}${legend(skyPrecipRhSeries)}</div>`}
-  ${html`<div>${resize(windPanel)}${legend(windSeries)}</div>`}
-  ${html`<div>${resize(wxPanel)}${legend(wxSeries)}</div>`}
-</div>
+${alertCallout || ""}
+
+## Temperature
+
+<div class="chart-container">${resize(tempPanel)}${legend(tempSeries)}</div>
+
+## Sky, Humidity & Precip
+
+<div class="chart-container">${resize(skyPrecipRhPanel)}${legend(skyPrecipRhSeries)}</div>
+
+## Wind
+
+<div class="chart-container">${resize(windPanel)}${legend(windSeries)}</div>
+
+## Rain, Thunder & Fog
+
+<div class="chart-container">${resize(wxPanel)}${legend(wxSeries)}</div>
 
 ```js
 // Hover state for the bottom summary section
 const hoveredIdx = Mutable(null);
 window.__hoveredIdx = hoveredIdx;
 
-// Track pointer position over the chart area
+// Track pointer position over the chart area. Each panel now sits in its own
+// container under its own markdown header, so the handlers are bound per panel and
+// the tooltip cleanup sweeps across all of them.
 {
   data; xDomain;
-  const el = document.querySelector(".chart-container");
-  if (el) {
+  const els = Array.from(document.querySelectorAll(".chart-container"));
+  const leave = () => { window.__hoveredIdx.value = null; };
+  for (const el of els) {
     const handler = (e) => {
       const rect = el.getBoundingClientRect();
       const mx = e.clientX - rect.left;
@@ -764,7 +759,6 @@ window.__hoveredIdx = hoveredIdx;
       const nearest = d3.minIndex(data, d => Math.abs(d.t - scale.invert(mx)));
       if (window.__hoveredIdx.value !== nearest) window.__hoveredIdx.value = nearest;
     };
-    const leave = () => { window.__hoveredIdx.value = null; };
     el.addEventListener("pointermove", handler);
     el.addEventListener("pointerleave", leave);
     // Ensure only one Chart tooltip is visible at a time. On tap/click, Plot's
@@ -775,11 +769,12 @@ window.__hoveredIdx = hoveredIdx;
       if (!targetSvg) return;
       // Defer so Plot's pointerdown handler (sticky toggle + render) runs first.
       setTimeout(() => {
-        const svgs = el.querySelectorAll("svg");
-        for (const svg of svgs) {
-          if (svg === targetSvg) continue;
-          const tip = svg.querySelector('g[aria-label="tip"]');
-          if (tip) tip.replaceChildren();
+        for (const other of els) {
+          for (const svg of other.querySelectorAll("svg")) {
+            if (svg === targetSvg) continue;
+            const tip = svg.querySelector('g[aria-label="tip"]');
+            if (tip) tip.replaceChildren();
+          }
         }
       }, 0);
     }, true);
@@ -796,6 +791,11 @@ window.__hoveredIdx = hoveredIdx;
 <style>
 .big { font-size: 2rem; font-weight: 600; line-height: 1.2; display: block; }
 .muted, .meta { color: var(--theme-foreground-muted); font-size: 13px; }
+
+/* Each panel is introduced by its own markdown header, so the header needs to sit
+   close enough to its chart to read as a caption rather than a new section. */
+.chart-container { margin-bottom: 1.5rem; }
+h2:has(+ .chart-container) { margin-bottom: 0.25rem; }
 
 /* Series colors live here, not in JS, so the theme toggle repaints the charts on its
    own. Both modes are selected steps of the same four hues, each validated against its
