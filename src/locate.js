@@ -54,6 +54,7 @@ export async function geolocationPermissionState(nav = globalThis.navigator) {
 function getPositionOnce({nav, options, watchdogMs, onLog}) {
   return new Promise((resolve, reject) => {
     let settled = false;
+    const started = Date.now();
     const finish = (fn, arg) => {
       if (settled) return;
       settled = true;
@@ -62,6 +63,7 @@ function getPositionOnce({nav, options, watchdogMs, onLog}) {
     };
 
     const watchdog = setTimeout(() => {
+      onLog("watchdog fired — no callback from the browser", {elapsedMs: Date.now() - started});
       finish(reject, new Error(
         "The browser never answered the location request — the permission prompt may " +
         "have been dismissed or blocked."
@@ -70,10 +72,28 @@ function getPositionOnce({nav, options, watchdogMs, onLog}) {
 
     onLog("requesting position", {...options, watchdogMs});
     nav.geolocation.getCurrentPosition(
-      (pos) => finish(resolve, pos),
+      (pos) => {
+        onLog("position acquired", {
+          lat: pos?.coords?.latitude,
+          lon: pos?.coords?.longitude,
+          accuracy_m: pos?.coords?.accuracy,
+          // A fix older than "now" came from the cache (maximumAge) — worth knowing
+          // when a stale position looks wrong.
+          fixAgeMs: pos?.timestamp != null ? Date.now() - pos.timestamp : undefined,
+          elapsedMs: Date.now() - started,
+        });
+        finish(resolve, pos);
+      },
       (err) => {
+        onLog("position error from browser", {
+          code: err?.code,
+          rawMessage: err?.message,
+          elapsedMs: Date.now() - started,
+          options,
+        });
         const mapped = new Error(describeGeolocationError(err));
         mapped.code = err?.code;
+        mapped.cause = err;
         finish(reject, mapped);
       },
       options
@@ -92,8 +112,9 @@ function getPositionOnce({nav, options, watchdogMs, onLog}) {
 export function requestPosition({
   nav = globalThis.navigator,
   timeout = 10000,
+  retryTimeout = 30000,
   maximumAge = 60000,
-  watchdogMs = timeout + 5000,
+  watchdogMs,
   retry = true,
   onLog = () => {},
 } = {}) {
@@ -104,14 +125,16 @@ export function requestPosition({
     return Promise.reject(new Error("Geolocation requires a secure (https) connection."));
   }
 
-  const attempt = (options) => getPositionOnce({nav, options, watchdogMs, onLog});
+  const attempt = (options) =>
+    getPositionOnce({nav, options, watchdogMs: watchdogMs ?? options.timeout + 5000, onLog});
 
   return attempt({timeout, maximumAge, enableHighAccuracy: false}).catch((err) => {
     // A denial will not resolve itself on a second ask, and a watchdog trip means the
     // browser is not answering at all — neither is worth retrying.
     if (!retry || err?.code === 1 || err?.code === undefined) throw err;
-    onLog("retrying position with high accuracy", {code: err.code});
-    return attempt({timeout, maximumAge: 0, enableHighAccuracy: true});
+    onLog("retrying position with high accuracy", {code: err.code, retryTimeout});
+    // GPS can take well over 10s for a cold fix, so the precise attempt gets more time.
+    return attempt({timeout: retryTimeout, maximumAge: 0, enableHighAccuracy: true});
   });
 }
 
