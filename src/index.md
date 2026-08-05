@@ -11,6 +11,7 @@ import {fetchForecast} from "./nws-client.js";
 import {buildBands} from "./bands.js";
 import {moonSVGDataURL} from "./moonsvg.js";
 import {generateTestData} from "./test-data.js";
+import {parseLatLon, requestPosition, geocode, geolocationPermissionState} from "./locate.js";
 
 const DEFAULT_LAT = 36.01;
 const DEFAULT_LON = -79.227;
@@ -56,26 +57,71 @@ window.__runtimeData = runtimeData;
 const raw = runtimeData ?? initialData;
 
 // Location picker UI
-const picker = html`<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem;">
-  <input type="text" id="loc-input" placeholder="City, ZIP, or lat,lon…" style="flex:1;padding:6px 10px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);font-size:14px;">
-  <button id="loc-here" title="Use current location" aria-label="Use current location" style="display:flex;align-items:center;justify-content:center;padding:6px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);cursor:pointer;">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="7"></circle>
-      <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"></circle>
-      <line x1="12" y1="1" x2="12" y2="4"></line>
-      <line x1="12" y1="20" x2="12" y2="23"></line>
-      <line x1="1" y1="12" x2="4" y2="12"></line>
-      <line x1="20" y1="12" x2="23" y2="12"></line>
-    </svg>
-  </button>
-  <button id="loc-go" style="padding:6px 14px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);cursor:pointer;font-size:14px;">Go</button>
+const picker = html`<div style="margin-bottom:1rem;">
+  <div style="display:flex;gap:0.5rem;align-items:center;">
+    <input type="text" id="loc-input" placeholder="City, ZIP, or lat,lon…" style="flex:1;padding:6px 10px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);font-size:14px;">
+    <button id="loc-here" title="Use current location" aria-label="Use current location" style="display:flex;align-items:center;justify-content:center;padding:6px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);cursor:pointer;">
+      <span class="loc-spinner" hidden></span>
+      <svg class="loc-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="7"></circle>
+        <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"></circle>
+        <line x1="12" y1="1" x2="12" y2="4"></line>
+        <line x1="12" y1="20" x2="12" y2="23"></line>
+        <line x1="1" y1="12" x2="4" y2="12"></line>
+        <line x1="20" y1="12" x2="23" y2="12"></line>
+      </svg>
+    </button>
+    <button id="loc-go" style="display:flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);cursor:pointer;font-size:14px;">
+      <span class="loc-spinner" hidden></span><span class="loc-label">Go</span>
+    </button>
+  </div>
+  <div id="loc-status" role="status" aria-live="polite" style="min-height:16px;margin-top:4px;font:12px var(--sans-serif);color:var(--theme-foreground-muted);"></div>
 </div>`;
 
 const locEl = picker.querySelector("#loc-input");
 const goEl = picker.querySelector("#loc-go");
 const hereEl = picker.querySelector("#loc-here");
+const statusEl = picker.querySelector("#loc-status");
+
+// One console channel for the whole picker, so a user reporting "nothing happens" can
+// paste a filtered console log that shows exactly how far the click got.
+const locLog = (...args) => console.info("[location]", ...args);
+
+function setStatus(message, kind = "info") {
+  statusEl.textContent = message ?? "";
+  statusEl.style.color = kind === "error"
+    ? "var(--alert-severe)"
+    : "var(--theme-foreground-muted)";
+}
+
+// Busy state: spinner on the button that was clicked, both buttons disabled so a
+// second click can't stack a request behind the first.
+function setBusy(button, busy) {
+  for (const b of [goEl, hereEl]) {
+    b.disabled = busy;
+    b.style.opacity = busy ? "0.6" : "";
+    b.style.cursor = busy ? "default" : "pointer";
+  }
+  if (!button) return;
+  const spinner = button.querySelector(".loc-spinner");
+  const icon = button.querySelector(".loc-icon");
+  if (spinner) spinner.hidden = !busy;
+  if (icon) icon.style.display = busy ? "none" : "";
+}
+
+async function withBusy(button, label, work) {
+  setBusy(button, true);
+  setStatus(label);
+  try {
+    return await work();
+  } finally {
+    setBusy(button, false);
+  }
+}
 
 async function updateLocation(lat, lon) {
+  locLog("fetching forecast for", lat, lon, testMode ? "(test mode)" : "");
+  setStatus(`Loading forecast for ${Number(lat).toFixed(3)}, ${Number(lon).toFixed(3)}…`);
   try {
     const data = testMode ? generateTestData(lat, lon) : await fetchForecast(lat, lon);
     if (window.__runtimeData) window.__runtimeData.value = data;
@@ -85,8 +131,13 @@ async function updateLocation(lat, lon) {
     if (testMode) p.set("test", "1");
     history.replaceState(null, "", `?${p}`);
     updateManifestLink(data.location);
+    locLog("forecast loaded:", data.location?.city, data.location?.state);
+    setStatus("");
+    return true;
   } catch (e) {
-    console.error("Failed to fetch forecast:", e);
+    console.error("[location] failed to fetch forecast:", e);
+    setStatus(e.message || "Failed to fetch forecast.", "error");
+    return false;
   }
 }
 
@@ -104,49 +155,78 @@ function updateManifestLink(loc) {
 
 goEl.addEventListener("click", async () => {
   const q = locEl.value.trim();
-  if (!q) return;
-  const parts = q.split(",").map(s => parseFloat(s.trim()));
-  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-    await updateLocation(parts[0], parts[1]);
+  locLog("Go clicked, query:", JSON.stringify(q));
+  if (!q) {
+    setStatus("Enter a city, ZIP, or lat,lon first.", "error");
     return;
   }
-  try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
-    const results = await r.json();
-    if (results.length) {
-      await updateLocation(parseFloat(results[0].lat), parseFloat(results[0].lon));
-    }
-  } catch (e) {
-    console.error("Geocoding failed:", e);
+
+  const coords = parseLatLon(q);
+  if (coords) {
+    locLog("parsed as coordinates:", coords);
+    await withBusy(goEl, "Loading forecast…", () => updateLocation(coords.lat, coords.lon));
+    return;
   }
+
+  await withBusy(goEl, `Looking up “${q}”…`, async () => {
+    try {
+      const hit = await geocode(q);
+      if (!hit) {
+        locLog("no geocoding match for", q);
+        setStatus(`No match for “${q}”.`, "error");
+        return;
+      }
+      locLog("geocoded to", hit);
+      await updateLocation(hit.lat, hit.lon);
+    } catch (e) {
+      console.error("[location] geocoding failed:", e);
+      setStatus("Location search failed — check your connection and try again.", "error");
+    }
+  });
 });
 
-hereEl.addEventListener("click", () => {
-  if (!navigator.geolocation) {
-    console.error("Geolocation is not available in this browser.");
-    return;
-  }
-  // Disable while the browser prompts/locates so repeat clicks can't stack requests.
-  hereEl.disabled = true;
-  hereEl.style.opacity = "0.5";
-  const done = () => { hereEl.disabled = false; hereEl.style.opacity = ""; };
-  navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      try {
-        await updateLocation(pos.coords.latitude, pos.coords.longitude);
-      } finally {
-        done();
-      }
-    },
-    (err) => {
-      console.error("Geolocation failed:", err);
-      done();
-    },
-    {timeout: 10000, maximumAge: 60000}
-  );
+hereEl.addEventListener("click", async () => {
+  locLog("location button clicked", {
+    secureContext: window.isSecureContext,
+    hasGeolocation: !!navigator.geolocation,
+  });
+
+  await withBusy(hereEl, "Waiting for your browser’s location permission…", async () => {
+    const permission = await geolocationPermissionState();
+    locLog("geolocation permission state:", permission);
+    if (permission === "denied") {
+      setStatus(
+        "Location is blocked for this site — allow it in your browser’s site settings, then try again.",
+        "error"
+      );
+      return;
+    }
+
+    let pos;
+    try {
+      pos = await requestPosition({onLog: (msg, detail) => locLog(msg, detail)});
+    } catch (e) {
+      console.error("[location] geolocation failed:", e);
+      setStatus(e.message, "error");
+      return;
+    }
+
+    locLog("got position", {
+      lat: pos.coords.latitude,
+      lon: pos.coords.longitude,
+      accuracy_m: pos.coords.accuracy,
+    });
+    setStatus("Locating…");
+    await updateLocation(pos.coords.latitude, pos.coords.longitude);
+  });
 });
 
 locEl.addEventListener("keydown", (e) => { if (e.key === "Enter") goEl.click(); });
+
+// Loading a new location re-runs this cell, which builds a fresh picker — restore what
+// was typed so the box doesn't blank out the moment the forecast arrives.
+locEl.value = window.__lastLocQuery ?? "";
+locEl.addEventListener("input", () => { window.__lastLocQuery = locEl.value; });
 ```
 
 ```js
@@ -869,6 +949,22 @@ h2:has(+ .chart-container) { margin-bottom: 0.25rem; }
   --alert-minor: #6b7280;
   --moon-fill: #ffffff;
 }
+/* Picker spinner — sized to sit in place of the 16px location icon. */
+.loc-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--theme-foreground-faint);
+  border-top-color: var(--theme-foreground);
+  border-radius: 50%;
+  animation: loc-spin 0.7s linear infinite;
+}
+.loc-spinner[hidden] { display: none; }
+@keyframes loc-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .loc-spinner { animation-duration: 2s; }
+}
+
 details summary::-webkit-details-marker { display:none; }
 details > summary::marker { display:none; content:""; }
 details summary { user-select:none; }
