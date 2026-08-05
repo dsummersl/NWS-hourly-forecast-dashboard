@@ -204,7 +204,10 @@ hereEl.addEventListener("click", async () => {
 
     let pos;
     try {
-      pos = await requestPosition({onLog: (msg, detail) => locLog(msg, detail)});
+      pos = await requestPosition({onLog: (msg, detail) => {
+        locLog(msg, detail);
+        if (msg.startsWith("retrying")) setStatus("Still trying — asking your device for a fresh fix…");
+      }});
     } catch (e) {
       console.error("[location] geolocation failed:", e);
       setStatus(e.message, "error");
@@ -363,7 +366,10 @@ function frame(yDomain, {showXAxis = false, pw = 1000} = {}) {
     // Opacity rides in the color so the day band can be tuned per theme from CSS alone
     // — dark mode needs a brighter wash than light mode to read as daylight at all.
     Plot.rect(bands.days, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-day-wash)", fillOpacity: 1}),
-    Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night)", fillOpacity: d => 0.28 - (d.moonIllumination ?? 0.5) * 0.20}),
+    // Night is two washes so both ends of the moon cycle stay tunable from CSS: a floor
+    // that every night gets, plus a new-moon layer that fades out as the moon fills in.
+    Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night-full)", fillOpacity: 1}),
+    Plot.rect(bands.nights, {x1: "start", x2: "end", y1: yDomain[0], y2: yDomain[1], fill: "var(--band-night-new)", fillOpacity: d => 1 - (d.moonIllumination ?? 0.5)}),
     Plot.ruleX(
       d3.timeDay.range(xDomain[0], xDomain[1]),
       {stroke: FAINT, strokeWidth: 1, strokeOpacity: 0.35}
@@ -933,6 +939,8 @@ h2:has(+ .chart-container) { margin-bottom: 0.25rem; }
   --series-wind:  #5b9bd5;
   --series-gust:  #e87ba4;
   --band-night: #16162a;
+  --band-night-full: rgba(22, 22, 42, 0.08);
+  --band-night-new:  rgba(22, 22, 42, 0.35);
   --band-day:   #ecd9a0;
   --band-day-wash: rgba(236, 217, 160, 0.06);
   --series-sky:   #9ca3af;
@@ -976,8 +984,10 @@ details summary { user-select:none; }
     --series-wind:  #3987e5;
     --series-gust:  #d55181;
     --band-night: #141e3e;
+    --band-night-full: rgba(20, 30, 62, 0.08);
+    --band-night-new:  rgba(20, 30, 62, 0.22);
     --band-day:   #c9a030;
-    --band-day-wash: rgba(224, 184, 72, 0.10);
+    --band-day-wash: rgba(240, 232, 205, 0.16);
     --weather-rain:   #3987e5;
     --weather-thunder:#ffd54a;
     --weather-fog:   #d6dce5;
@@ -996,8 +1006,10 @@ details summary { user-select:none; }
   --series-wind:  #3987e5;
   --series-gust:  #d55181;
   --band-night: #141e3e;
+  --band-night-full: rgba(20, 30, 62, 0.08);
+  --band-night-new:  rgba(20, 30, 62, 0.22);
   --band-day:   #c9a030;
-  --band-day-wash: rgba(224, 184, 72, 0.10);
+  --band-day-wash: rgba(240, 232, 205, 0.16);
   --weather-rain:   #3987e5;
   --weather-thunder:#ffd54a;
   --weather-fog:   #94a3b8;

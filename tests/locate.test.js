@@ -95,6 +95,67 @@ describe("requestPosition", () => {
   it("rejects when geolocation is unavailable", async () => {
     await expect(requestPosition({ nav: {} })).rejects.toThrow(/not supported/i);
   });
+
+  it("retries with high accuracy and no cache when the position is unavailable", async () => {
+    const pos = { coords: { latitude: 1, longitude: 2 } };
+    const calls = [];
+    const nav = {
+      geolocation: {
+        getCurrentPosition: (ok, fail, options) => {
+          calls.push(options);
+          if (calls.length === 1) fail({ code: 2 });
+          else ok(pos);
+        },
+      },
+    };
+    await expect(requestPosition({ nav })).resolves.toBe(pos);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toMatchObject({ enableHighAccuracy: false });
+    expect(calls[1]).toMatchObject({ enableHighAccuracy: true, maximumAge: 0 });
+  });
+
+  it("reports the second failure when the retry also fails", async () => {
+    let calls = 0;
+    const nav = {
+      geolocation: {
+        getCurrentPosition: (_ok, fail) => {
+          calls += 1;
+          fail({ code: 2 });
+        },
+      },
+    };
+    await expect(requestPosition({ nav })).rejects.toThrow(/could not determine/i);
+    expect(calls).toBe(2);
+  });
+
+  it("does not retry a permission denial", async () => {
+    let calls = 0;
+    const nav = {
+      geolocation: {
+        getCurrentPosition: (_ok, fail) => {
+          calls += 1;
+          fail({ code: 1 });
+        },
+      },
+    };
+    await expect(requestPosition({ nav })).rejects.toThrow(/permission was denied/i);
+    expect(calls).toBe(1);
+  });
+
+  it("does not retry when the browser never calls back", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const nav = { geolocation: { getCurrentPosition: () => { calls += 1; } } };
+      const p = requestPosition({ nav, watchdogMs: 1000 });
+      const assertion = expect(p).rejects.toThrow(/never answered/i);
+      await vi.advanceTimersByTimeAsync(1001);
+      await assertion;
+      expect(calls).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("geocode", () => {

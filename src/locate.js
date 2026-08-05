@@ -9,8 +9,13 @@
 
 export const GEO_ERROR_MESSAGES = {
   1: "Location permission was denied. Allow location access for this site in your browser settings.",
-  2: "Your device could not determine a position.",
-  3: "Timed out waiting for a position.",
+  2:
+    "Your device could not determine a position. Permission is granted, so this is usually the " +
+    "operating system’s location service: check that it is turned on (and that your browser is " +
+    "allowed to use it), or type a place name or “lat, lon” in the search box instead.",
+  3:
+    "Timed out waiting for a position. Try again somewhere with a better signal, or type a place " +
+    "name or “lat, lon” in the search box instead.",
 };
 
 export function describeGeolocationError(err) {
@@ -44,25 +49,10 @@ export async function geolocationPermissionState(nav = globalThis.navigator) {
   }
 }
 
-// getCurrentPosition as a promise that is guaranteed to settle. `timeout` is handed to
-// the browser; `watchdogMs` covers the case where the browser never calls back at all.
-export function requestPosition({
-  nav = globalThis.navigator,
-  timeout = 10000,
-  maximumAge = 60000,
-  watchdogMs = timeout + 5000,
-  onLog = () => {},
-} = {}) {
+// One getCurrentPosition call as a promise that is guaranteed to settle. `options` is
+// handed to the browser; `watchdogMs` covers the case where it never calls back at all.
+function getPositionOnce({nav, options, watchdogMs, onLog}) {
   return new Promise((resolve, reject) => {
-    if (!nav?.geolocation) {
-      reject(new Error("Geolocation is not supported by this browser."));
-      return;
-    }
-    if (globalThis.isSecureContext === false) {
-      reject(new Error("Geolocation requires a secure (https) connection."));
-      return;
-    }
-
     let settled = false;
     const finish = (fn, arg) => {
       if (settled) return;
@@ -78,7 +68,7 @@ export function requestPosition({
       ));
     }, watchdogMs);
 
-    onLog("requesting position", {timeout, maximumAge, watchdogMs});
+    onLog("requesting position", {...options, watchdogMs});
     nav.geolocation.getCurrentPosition(
       (pos) => finish(resolve, pos),
       (err) => {
@@ -86,8 +76,42 @@ export function requestPosition({
         mapped.code = err?.code;
         finish(reject, mapped);
       },
-      {timeout, maximumAge, enableHighAccuracy: false}
+      options
     );
+  });
+}
+
+// Ask the browser where we are, guaranteed to settle.
+//
+// The first attempt is cheap: a cached fix is fine and there is no reason to spin up GPS
+// for a forecast. But a cheap attempt is also the one that reports POSITION_UNAVAILABLE
+// (code 2) most readily — network/Wi-Fi positioning is the provider most likely to have
+// nothing to offer, and a stale-cache read can fail on its own. So when the cheap attempt
+// fails with anything other than a hard permission denial, retry once with the caches
+// bypassed and the precise providers enabled before giving up.
+export function requestPosition({
+  nav = globalThis.navigator,
+  timeout = 10000,
+  maximumAge = 60000,
+  watchdogMs = timeout + 5000,
+  retry = true,
+  onLog = () => {},
+} = {}) {
+  if (!nav?.geolocation) {
+    return Promise.reject(new Error("Geolocation is not supported by this browser."));
+  }
+  if (globalThis.isSecureContext === false) {
+    return Promise.reject(new Error("Geolocation requires a secure (https) connection."));
+  }
+
+  const attempt = (options) => getPositionOnce({nav, options, watchdogMs, onLog});
+
+  return attempt({timeout, maximumAge, enableHighAccuracy: false}).catch((err) => {
+    // A denial will not resolve itself on a second ask, and a watchdog trip means the
+    // browser is not answering at all — neither is worth retrying.
+    if (!retry || err?.code === 1 || err?.code === undefined) throw err;
+    onLog("retrying position with high accuracy", {code: err.code});
+    return attempt({timeout, maximumAge: 0, enableHighAccuracy: true});
   });
 }
 
