@@ -58,11 +58,22 @@ const raw = runtimeData ?? initialData;
 // Location picker UI
 const picker = html`<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem;">
   <input type="text" id="loc-input" placeholder="City, ZIP, or lat,lon…" style="flex:1;padding:6px 10px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);font-size:14px;">
+  <button id="loc-here" title="Use current location" aria-label="Use current location" style="display:flex;align-items:center;justify-content:center;padding:6px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);cursor:pointer;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="7"></circle>
+      <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"></circle>
+      <line x1="12" y1="1" x2="12" y2="4"></line>
+      <line x1="12" y1="20" x2="12" y2="23"></line>
+      <line x1="1" y1="12" x2="4" y2="12"></line>
+      <line x1="20" y1="12" x2="23" y2="12"></line>
+    </svg>
+  </button>
   <button id="loc-go" style="padding:6px 14px;border:1px solid var(--theme-foreground-faint);border-radius:4px;background:var(--theme-background);color:var(--theme-foreground);cursor:pointer;font-size:14px;">Go</button>
 </div>`;
 
 const locEl = picker.querySelector("#loc-input");
 const goEl = picker.querySelector("#loc-go");
+const hereEl = picker.querySelector("#loc-here");
 
 async function updateLocation(lat, lon) {
   try {
@@ -108,6 +119,31 @@ goEl.addEventListener("click", async () => {
   } catch (e) {
     console.error("Geocoding failed:", e);
   }
+});
+
+hereEl.addEventListener("click", () => {
+  if (!navigator.geolocation) {
+    console.error("Geolocation is not available in this browser.");
+    return;
+  }
+  // Disable while the browser prompts/locates so repeat clicks can't stack requests.
+  hereEl.disabled = true;
+  hereEl.style.opacity = "0.5";
+  const done = () => { hereEl.disabled = false; hereEl.style.opacity = ""; };
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        await updateLocation(pos.coords.latitude, pos.coords.longitude);
+      } finally {
+        done();
+      }
+    },
+    (err) => {
+      console.error("Geolocation failed:", err);
+      done();
+    },
+    {timeout: 10000, maximumAge: 60000}
+  );
 });
 
 locEl.addEventListener("keydown", (e) => { if (e.key === "Enter") goEl.click(); });
