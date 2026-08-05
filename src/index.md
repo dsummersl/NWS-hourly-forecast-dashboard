@@ -575,10 +575,17 @@ function mergeQpfGroups(groups, maxHours) {
 const COVERAGE_LABELS = ["", "Slight Chance", "Chance", "Likely", "Occasional"];
 const COVERAGE_TICKS = {1: "SCHC", 2: "CHC", 3: "LKLY", 4: "OCNL"};
 
+// Coverage is a confidence scale, so paint it like one: a slight chance is a faint
+// hint you can look past, a likely/occasional forecast is fully opaque.
+const COVERAGE_OPACITY = [0, 0.25, 0.5, 0.8, 1];
+const coverageOpacity = (d) => COVERAGE_OPACITY[d.level] ?? 1;
+
 // Rain, thunder and fog share one axis (NWS coverage levels) and rarely overlap, so
 // they stack into a single panel. Each gets a distinct *texture* rather than a distinct
-// slot: fog is a blurred wash underneath, rain a solid bar, thunder a bolt hatch that
-// leaves most of its area transparent so whatever is beneath still reads through.
+// slot: fog is a blurred wash underneath, rain a filled bar, thunder a bolt hatch that
+// leaves most of its area transparent so whatever is beneath still reads through. Rain
+// and thunder also fade with coverage, so a slight chance stays quiet and a likely one
+// reads at full strength.
 const SVG_NS = "http://www.w3.org/2000/svg";
 let paintSeq = 0;
 
@@ -637,7 +644,8 @@ function boltHatched(options, color) {
       const path = document.createElementNS(SVG_NS, "path");
       path.setAttribute("d", BOLT_PATH);
       path.setAttribute("fill", color);
-      path.setAttribute("fill-opacity", "0.95");
+      // Solid inside the pattern: the per-bar fill-opacity carries the coverage ramp.
+      path.setAttribute("fill-opacity", "1");
       pattern.append(path);
       return pattern;
     },
@@ -674,7 +682,8 @@ const wxPanel = panel({
     return [
       Plot.rectY(rainData, {
         x: "t", y1: 0, y2: "level", fill: "var(--weather-rain)",
-        interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2, fillOpacity: 0.5,
+        interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2,
+        fillOpacity: coverageOpacity,
       }),
       Plot.rectY(fogData, fogged({
         x: "t", y1: 0, y2: "level", fill: "var(--weather-fog)", fillOpacity: 0.65,
@@ -683,6 +692,7 @@ const wxPanel = panel({
       Plot.rectY(thunderData, boltHatched({
         x: "t", y1: 0, y2: "level",
         interval: d3.timeHour.every(step), insetLeft: 1, insetRight: 1, ry2: 2,
+        fillOpacity: coverageOpacity,
       }, "var(--weather-thunder)")),
       Plot.rect(qpfDisplay, {
         x1: "start", x2: "end", y1: 0.25, y2: 0.75,
