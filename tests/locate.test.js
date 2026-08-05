@@ -110,8 +110,14 @@ describe("requestPosition", () => {
     };
     await expect(requestPosition({ nav })).resolves.toBe(pos);
     expect(calls).toHaveLength(2);
-    expect(calls[0]).toMatchObject({ enableHighAccuracy: false });
-    expect(calls[1]).toMatchObject({ enableHighAccuracy: true, maximumAge: 0 });
+    expect(calls[0]).toMatchObject({ enableHighAccuracy: false, timeout: 10000 });
+    expect(calls[1]).toMatchObject({ enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+  });
+
+  it("keeps the raw browser error as the cause of the mapped error", async () => {
+    const raw = { code: 2, message: "kCLErrorLocationUnknown" };
+    const nav = { geolocation: { getCurrentPosition: (_ok, fail) => fail(raw) } };
+    await expect(requestPosition({ nav, retry: false })).rejects.toMatchObject({ cause: raw });
   });
 
   it("reports the second failure when the retry also fails", async () => {

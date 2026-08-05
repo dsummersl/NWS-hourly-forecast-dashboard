@@ -210,6 +210,12 @@ hereEl.addEventListener("click", async () => {
       }});
     } catch (e) {
       console.error("[location] geolocation failed:", e);
+      if (e.cause) {
+        console.error("[location] raw browser error:", {
+          code: e.cause.code,
+          message: e.cause.message,
+        });
+      }
       setStatus(e.message, "error");
       return;
     }
