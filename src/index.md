@@ -834,6 +834,22 @@ const wxSeries = [
 
 ```js
 // Active weather alerts callout
+
+// NWS alert text is hard-wrapped at ~69 chars for fixed-width display.
+// Collapse the wrap-induced newlines within each paragraph/bullet back into
+// spaces, while preserving the blank lines that separate paragraphs/bullets.
+function cleanAlertText(text) {
+  if (!text) return text;
+  // Treat a bullet marker ("* " or "- ") at the start of a line as its own
+  // paragraph, even when the source didn't put a blank line before it.
+  const withBulletBreaks = text.replace(/\n(?=[*-] )/g, "\n\n");
+  return withBulletBreaks
+    .split(/\n{2,}/)
+    .map(block => block.replace(/\s*\n\s*/g, " ").trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 const SEVERITY_COLORS = {
   Extreme: "var(--alert-extreme)",
   Severe: "var(--alert-severe)",
@@ -851,8 +867,8 @@ const alertCallout = !alertEntries?.length ? null : html`<div style="margin-bott
     </summary>
     <div style="margin-top:0.5rem;font-size:0.85rem;">
       <div style="color:var(--theme-foreground-muted);margin-bottom:0.5rem;">${a.headline}</div>
-      ${a.description ? html`<div style="margin-bottom:0.5rem;white-space:pre-wrap;">${a.description}</div>` : null}
-      ${a.instruction ? html`<div style="font-weight:600;white-space:pre-wrap;">${a.instruction}</div>` : null}
+      ${a.description ? html`<div style="margin-bottom:0.5rem;white-space:pre-wrap;">${cleanAlertText(a.description)}</div>` : null}
+      ${a.instruction ? html`<div style="font-weight:600;white-space:pre-wrap;">${cleanAlertText(a.instruction)}</div>` : null}
     </div>
   </details>`)}
 </div>`;
