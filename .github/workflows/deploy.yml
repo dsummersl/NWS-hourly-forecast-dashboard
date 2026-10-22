@@ -45,7 +45,13 @@ jobs:
         run: npm test
 
       - name: Build
-        run: npm run build
+        run: |
+          for attempt in 1 2 3; do
+            npm run build && exit 0
+            echo "Build attempt $attempt failed; retrying..."
+            sleep 15
+          done
+          exit 1
 
       - uses: actions/upload-pages-artifact@v3
         with:
